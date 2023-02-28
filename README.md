@@ -40,6 +40,8 @@ $ pip install audiolm-pytorch
 
 ## Usage
 
+### SoundStream
+
 First, `SoundStream` needs to be trained on a large corpus of audio data
 
 ```python
@@ -57,12 +59,37 @@ trainer = SoundStreamTrainer(
     folder = '/path/to/audio/files',
     batch_size = 4,
     grad_accum_every = 8,         # effective batch size of 32
-    data_max_length = 320 * 32,
+    data_max_length_seconds = 2,  # train on 2 second audio
     num_train_steps = 10000
 ).cuda()
 
 trainer.train()
+
+# after a lot of training, you can test the autoencoding as so
+
+audio = torch.randn(10080).cuda()
+recons = soundstream(audio, return_recons_only = True) # (1, 10080) - 1 channel
 ```
+
+You can also use soundstreams that are specific to `AudioLM` and `MusicLM` by importing `AudioLMSoundStream` and `MusicLMSoundStream` respectively
+
+```python
+from audiolm_pytorch import AudioLMSoundStream, MusicLMSoundStream
+
+soundstream = AudioLMSoundStream(...) # say you want the hyperparameters as in Audio LM paper
+
+# rest is the same as above
+```
+
+As of version `0.17.0`, you can now invoke the class method on `SoundStream` to load from checkpoint files, without having to remember your configurations.
+
+```python
+from audiolm_pytorch import SoundStream
+
+soundstream = SoundStream.init_and_load_from('./path/to/checkpoint.pt')
+```
+
+### Hierarchical Transformers
 
 Then three separate transformers (`SemanticTransformer`, `CoarseTransformer`, `FineTransformer`) need to be trained
 
@@ -104,19 +131,14 @@ ex. `CoarseTransformer`
 
 ```python
 import torch
-from audiolm_pytorch import HubertWithKmeans, SoundStream, CoarseTransformer, CoarseTransformerWrapper, CoarseTransformerTrainer
+from audiolm_pytorch import HubertWithKmeans, SoundStream, CoarseTransformer, CoarseTransformerTrainer
 
 wav2vec = HubertWithKmeans(
     checkpoint_path = './hubert/hubert_base_ls960.pt',
     kmeans_path = './hubert/hubert_base_ls960_L9_km500.bin'
 )
 
-soundstream = SoundStream(
-    codebook_size = 1024,
-    rq_num_quantizers = 8,
-)
-
-soundstream.load('/path/to/trained/soundstream.pt')
+soundstream = SoundStream.init_and_load_from('/path/to/trained/soundstream.pt')
 
 coarse_transformer = CoarseTransformer(
     num_semantic_tokens = wav2vec.codebook_size,
@@ -143,14 +165,9 @@ ex. `FineTransformer`
 
 ```python
 import torch
-from audiolm_pytorch import SoundStream, FineTransformer, FineTransformerWrapper, FineTransformerTrainer
+from audiolm_pytorch import SoundStream, FineTransformer, FineTransformerTrainer
 
-soundstream = SoundStream(
-    codebook_size = 1024,
-    rq_num_quantizers = 8,
-)
-
-soundstream.load('/path/to/trained/soundstream.pt')
+soundstream = SoundStream.init_and_load_from('/path/to/trained/soundstream.pt')
 
 fine_transformer = FineTransformer(
     num_coarse_quantizers = 3,

@@ -518,9 +518,6 @@ class SoundStream(nn.Module):
         x = rearrange(x, 'b n c -> b c n')
         return self.decoder(x)
 
-<<<<<<< Updated upstream
-    def load(self, path):
-=======
     def save(self, path):
         path = Path(path)
         pkg = dict(
@@ -533,7 +530,6 @@ class SoundStream(nn.Module):
 
     @classmethod
     def init_and_load_from(cls, path, strict = True):
->>>>>>> Stashed changes
         path = Path(path)
         assert path.exists()
         pkg = torch.load(str(path), map_location = 'cpu')
