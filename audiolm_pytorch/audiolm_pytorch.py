@@ -994,6 +994,7 @@ class SemanticTransformerWrapper(nn.Module):
             ids = prime_ids
         else:
             ids = torch.empty((batch_size, 0), dtype = torch.long, device = device)
+        print(f"ids.shape: {ids.shape} and prime_wave {exists(prime_wave)}")
 
         if self.unique_consecutive:
             ids = batch_unique_consecutive(ids, pad_value = self.pad_id)

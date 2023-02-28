@@ -38,6 +38,9 @@ from audiolm_pytorch.audiolm_pytorch import (
 from audiolm_pytorch.data import SoundDataset, get_dataloader
 from audiolm_pytorch.utils import AudioConditionerBase
 
+from audiolm_pytorch.version import __version__
+from packaging import version
+
 from accelerate import Accelerator
 from accelerate.utils import DistributedDataParallelKwargs
 
@@ -117,6 +120,7 @@ class SoundStreamTrainer(nn.Module):
         num_train_steps,
         batch_size,
         data_max_length = None,
+        data_max_length_seconds = None,
         folder,
         lr = 2e-4,
         grad_accum_every = 4,
@@ -172,6 +176,11 @@ class SoundStreamTrainer(nn.Module):
         self.discr_max_grad_norm = discr_max_grad_norm
 
         # create dataset
+
+        assert not (exists(data_max_length) and exists(data_max_length_seconds))
+
+        if exists(data_max_length_seconds):
+            data_max_length = data_max_length_seconds * soundstream.target_sample_hz
 
         self.ds = SoundDataset(
             folder,
@@ -239,11 +248,18 @@ class SoundStreamTrainer(nn.Module):
         hps = {"num_train_steps": num_train_steps, "data_max_length": data_max_length, "learning_rate": lr}
         self.accelerator.init_trackers("soundstream", config=hps)        
 
+    def set_model_as_ema_model_(self):
+        """ this will force the main 'online' model to have same parameters as the exponentially moving averaged model """
+        assert self.use_ema
+        self.ema_soundstream.ema_model.load_state_dict(self.soundstream.state_dict())
+
     def save(self, path):
         pkg = dict(
             model = self.accelerator.get_state_dict(self.soundstream),
             optim = self.optim.state_dict(),
-            discr_optim = self.discr_optim.state_dict()
+            config = self.soundstream._configs,
+            discr_optim = self.discr_optim.state_dict(),
+            version = __version__
         )
 
         if self.use_ema:
@@ -264,6 +280,25 @@ class SoundStreamTrainer(nn.Module):
         assert path.exists()
         pkg = torch.load(str(path), map_location = 'cpu')
 
+<<<<<<< Updated upstream
+=======
+        # if loading from old version, make a hacky guess
+
+        if len(pkg.keys()) > 20:
+            self.unwrapped_soundstream.load_state_dict(pkg)
+
+            if self.use_ema:
+                self.ema_soundstream.ema_model.load_state_dict(pkg)
+            return
+
+        # check version
+
+        if 'version' in pkg and version.parse(pkg['version']) < version.parse(__version__):
+            print(f'model was trained on older version {pkg["version"]} of audiolm-pytorch')
+
+        # otherwise load things normally
+
+>>>>>>> Stashed changes
         self.unwrapped_soundstream.load_state_dict(pkg['model'])
 
         if self.use_ema:
@@ -471,6 +506,7 @@ class SemanticTransformerTrainer(nn.Module):
         audio_conditioner: Optional[AudioConditionerBase] = None,
         dataset: Optional[Dataset] = None,
         data_max_length = None,
+        data_max_length_seconds = None,
         folder = None,
         lr = 3e-4,
         grad_accum_every = 1,
@@ -516,6 +552,11 @@ class SemanticTransformerTrainer(nn.Module):
         self.ds = dataset
         if not exists(self.ds):
             assert exists(folder), 'folder must be passed in, if not passing in a custom dataset for text conditioned audio synthesis training'
+
+            assert not (exists(data_max_length) and exists(data_max_length_seconds))
+
+            if exists(data_max_length_seconds):
+                data_max_length = data_max_length_seconds * wav2vec.target_sample_hz
 
             self.ds = SoundDataset(
                 folder,
@@ -578,7 +619,8 @@ class SemanticTransformerTrainer(nn.Module):
     def save(self, path):
         pkg = dict(
             model = self.accelerator.get_state_dict(self.transformer),
-            optim = self.optim.state_dict()
+            optim = self.optim.state_dict(),
+            version = __version__
         )
         torch.save(pkg, path)
 
@@ -586,6 +628,11 @@ class SemanticTransformerTrainer(nn.Module):
         path = Path(path)
         assert path.exists()
         pkg = torch.load(str(path), map_location = 'cpu')
+
+        # check version
+
+        if 'version' in pkg and version.parse(pkg['version']) < version.parse(__version__):
+            print(f'model was trained on older version {pkg["version"]} of audiolm-pytorch')
 
         transformer = self.accelerator.unwrap_model(self.transformer)
         transformer.load_state_dict(pkg['model'])
@@ -700,6 +747,7 @@ class CoarseTransformerTrainer(nn.Module):
         dataset: Optional[Dataset] = None,
         ds_fields: Tuple[str, ...] = ('raw_wave', 'raw_wave_for_soundstream', 'text'),
         data_max_length = None,
+        data_max_length_seconds = None,
         folder = None,
         lr = 3e-4,
         grad_accum_every = 1,
@@ -748,6 +796,11 @@ class CoarseTransformerTrainer(nn.Module):
 
         if not exists(self.ds):
             assert exists(folder), 'folder must be passed in, if not passing in a custom dataset for text conditioned audio synthesis training'
+
+            assert not (exists(data_max_length) and exists(data_max_length_seconds))
+
+            if exists(data_max_length_seconds):
+                data_max_length = tuple(data_max_length_seconds * hz for hz in (wav2vec.target_sample_hz, soundstream.target_sample_hz))
 
             self.ds = SoundDataset(
                 folder,
@@ -815,7 +868,8 @@ class CoarseTransformerTrainer(nn.Module):
     def save(self, path):
         pkg = dict(
             model = self.accelerator.get_state_dict(self.transformer),
-            optim = self.optim.state_dict()
+            optim = self.optim.state_dict(),
+            version = __version__
         )
         torch.save(pkg, path)
 
@@ -823,6 +877,11 @@ class CoarseTransformerTrainer(nn.Module):
         path = Path(path)
         assert path.exists()
         pkg = torch.load(str(path), map_location = 'cpu')
+
+        # check version
+
+        if 'version' in pkg and version.parse(pkg['version']) < version.parse(__version__):
+            print(f'model was trained on older version {pkg["version"]} of audiolm-pytorch')
 
         transformer = self.accelerator.unwrap_model(self.transformer)
         transformer.load_state_dict(pkg['model'])
@@ -936,6 +995,7 @@ class FineTransformerTrainer(nn.Module):
         audio_conditioner: Optional[AudioConditionerBase] = None,
         dataset: Optional[Dataset] = None,
         data_max_length = None,
+        data_max_length_seconds = None,
         dataset_normalize = False,
         folder = None,
         lr = 3e-4,
@@ -983,6 +1043,11 @@ class FineTransformerTrainer(nn.Module):
 
         if not exists(self.ds):
             assert exists(folder), 'folder must be passed in, if not passing in a custom dataset for text conditioned audio synthesis training'
+
+            assert not (exists(data_max_length) and exists(data_max_length_seconds))
+
+            if exists(data_max_length_seconds):
+                data_max_length = data_max_length_seconds * soundstream.target_sample_hz
 
             self.ds = SoundDataset(
                 folder,
@@ -1047,7 +1112,8 @@ class FineTransformerTrainer(nn.Module):
     def save(self, path):
         pkg = dict(
             model = self.accelerator.get_state_dict(self.transformer),
-            optim = self.optim.state_dict()
+            optim = self.optim.state_dict(),
+            version = __version__
         )
         torch.save(pkg, path)
 
@@ -1055,6 +1121,11 @@ class FineTransformerTrainer(nn.Module):
         path = Path(path)
         assert path.exists()
         pkg = torch.load(str(path), map_location = 'cpu')
+
+        # check version
+
+        if 'version' in pkg and version.parse(pkg['version']) < version.parse(__version__):
+            print(f'model was trained on older version {pkg["version"]} of audiolm-pytorch')
 
         transformer = self.accelerator.unwrap_model(self.transformer)
         transformer.load_state_dict(pkg['model'])
