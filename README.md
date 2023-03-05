@@ -32,6 +32,8 @@ In the future, <a href="https://www.youtube.com/watch?v=olNvmUCmY8o">this movie 
 
 - <a href="https://github.com/AndreyBocharnikov">Andrey</a> for identifying a missing loss in soundstream and guiding me through the proper mel spectrogram hyperparameters
 
+- <a href="https://github.com/alexdemartos">Alejandro</a> and <a href="https://github.com/ilya16">Ilya</a> for sharing their results with training soundstream, and for working through a few issues with the local attention positional embeddings
+
 ## Install
 
 ```bash
@@ -327,6 +329,7 @@ $ accelerate launch train.py
 - [ ] cli tool, something like `audiolm generate <wav.file | text>` and save generated wav file to local directory
 - [ ] return a list of waves in the case of variable lengthed audio
 - [ ] just take care of the edge case in coarse transformer text conditioned training, where the raw wave is resampled at different frequencies. autodetermine how to route based on length
+- [ ] allow for specialized relative positional embeddings in fine transformer based on absolute matching positions of quantizers between coarse and fine
 
 ## Citations
 
@@ -451,5 +454,25 @@ $ accelerate launch train.py
     author = {Justin Gilmer, Andrea Schioppa, and Jeremy Cohen},
     year   = {2023},
     status = {to be published - one attention stabilization technique is circulating within Google Brain, being used by multiple teams}
+}
+```
+
+```bibtex
+@article{Defossez2022HighFN,
+    title   = {High Fidelity Neural Audio Compression},
+    author  = {Alexandre D'efossez and Jade Copet and Gabriel Synnaeve and Yossi Adi},
+    journal = {ArXiv},
+    year    = {2022},
+    volume  = {abs/2210.13438}
+}
+```
+
+```bibtex
+@article{Hu2017SqueezeandExcitationN,
+    title   = {Squeeze-and-Excitation Networks},
+    author  = {Jie Hu and Li Shen and Gang Sun},
+    journal = {2018 IEEE/CVF Conference on Computer Vision and Pattern Recognition},
+    year    = {2017},
+    pages   = {7132-7141}
 }
 ```
