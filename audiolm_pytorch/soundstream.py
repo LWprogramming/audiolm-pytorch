@@ -544,6 +544,7 @@ class SoundStream(nn.Module):
         self.multi_spectral_recon_loss_weight = multi_spectral_recon_loss_weight
         self.adversarial_loss_weight = adversarial_loss_weight
         self.feature_loss_weight = feature_loss_weight
+
         self.register_buffer('zero', torch.tensor([0.]), persistent = False)
 
     @property
