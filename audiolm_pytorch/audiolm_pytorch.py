@@ -696,8 +696,9 @@ class CoarseTransformer(nn.Module):
         if exists(text_mask) and cond_drop_prob > 0:
             keep_mask = prob_mask_like((b,), 1 - cond_drop_prob, device = device)
             text_mask = rearrange(keep_mask, 'b -> b 1') & text_mask
-
+        print(f"before rearranging: semantic_token_ids.shape {semantic_token_ids.shape}, coarse_token_ids.shape {coarse_token_ids.shape}")
         coarse_token_ids, semantic_token_ids = map(lambda t: rearrange(t, 'b ... -> b (...)'), (coarse_token_ids, semantic_token_ids))
+        print(f"after rearranging: semantic_token_ids.shape {semantic_token_ids.shape}, coarse_token_ids.shape {coarse_token_ids.shape}")
 
         offsets = self.codebook_size * torch.arange(self.num_coarse_quantizers, device = device)
         offsets = repeat(offsets, 'q -> 1 (n q)', n = ceil_div(coarse_token_ids.shape[-1], self.num_coarse_quantizers))
@@ -1345,11 +1346,8 @@ class CoarseTransformerWrapper(nn.Module):
                 _, indices, _ = self.soundstream(raw_wave_for_soundstream, return_encoded = True)
                 coarse_token_ids, _ = indices[..., :self.num_coarse_quantizers], indices[..., self.num_coarse_quantizers:]
 
-        print(f"before rearranging: semantic_token_ids.shape {semantic_token_ids.shape}, coarse_token_ids.shape {coarse_token_ids.shape}")
         semantic_token_ids = rearrange(semantic_token_ids, 'b ... -> b (...)')
         coarse_token_ids = rearrange(coarse_token_ids, 'b ... -> b (...)')
-        print(
-            f"after rearranging: semantic_token_ids.shape {semantic_token_ids.shape}, coarse_token_ids.shape {coarse_token_ids.shape}")
 
         if self.training:
             semantic_token_ids = append_eos_id(semantic_token_ids, self.transformer.semantic_eos_id)
