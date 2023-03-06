@@ -1136,6 +1136,7 @@ class SemanticTransformerWrapper(nn.Module):
 
             last_logit_indices += 1
 
+        print(f"before masking eos, sample_semantic_ids.shape: {sample_semantic_ids.shape}")
         sample_semantic_ids = mask_out_after_eos_id(sample_semantic_ids, self.pad_id, keep_eos = False)
 
         return sample_semantic_ids
