@@ -75,18 +75,18 @@ class HubertWithKmeans(nn.Module):
             wav_input = curtail_to_multiple(wav_input, self.seq_len_multiple_of)
 
         embed = self.model(wav_input, features_only = True)
-        print(f"embed.keys(): {embed.keys()}")
+        # print(f"embed.keys(): {embed.keys()}")
         # padding_mask is also a key but it's None
-        print(f"embed['x'] shape: {embed['x'].shape}, embed['features'].shape: {embed['features'].shape}")
+        # print(f"embed['x'] shape: {embed['x'].shape}, embed['features'].shape: {embed['features'].shape}")
         embed, packed_shape = pack([embed['x']], '* d')
-        print(f"wav_input shape: {wav_input.shape}, embed shape: {embed.shape}, packed_shape: {packed_shape}")
+        # print(f"wav_input shape: {wav_input.shape}, embed shape: {embed.shape}, packed_shape: {packed_shape}")
 
         codebook_indices = self.kmeans.predict(embed.cpu().detach().numpy())
 
         codebook_indices = torch.from_numpy(codebook_indices).to(device).long()
-        print(f"codebook_indices before unpacking: {codebook_indices.shape}")
+        # print(f"codebook_indices before unpacking: {codebook_indices.shape}")
         if flatten:
             return codebook_indices
         codebook_indices, = unpack(codebook_indices, packed_shape, '*')
-        print(f"codebook_indices after unpacking: {codebook_indices.shape}")
+        # print(f"codebook_indices after unpacking: {codebook_indices.shape}")
         return codebook_indices

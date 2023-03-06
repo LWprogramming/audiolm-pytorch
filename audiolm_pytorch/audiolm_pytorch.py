@@ -700,13 +700,23 @@ class CoarseTransformer(nn.Module):
         coarse_token_ids, semantic_token_ids = map(lambda t: rearrange(t, 'b ... -> b (...)'), (coarse_token_ids, semantic_token_ids))
         print(f"after rearranging: semantic_token_ids.shape {semantic_token_ids.shape}, coarse_token_ids.shape {coarse_token_ids.shape}")
 
-        offsets = self.codebook_size * torch.arange(self.num_coarse_quantizers, device = device)
+        offsets = self.codebook_size * torch.arange(self.num_coarse_quantizers, device = device) # [0, 500, 1000, 1500, ...]
+        print(f"coarse_token_ids.shape {coarse_token_ids.shape}")
         offsets = repeat(offsets, 'q -> 1 (n q)', n = ceil_div(coarse_token_ids.shape[-1], self.num_coarse_quantizers))
+        print(f"offsets.shape {offsets.shape}")
         offsets = offsets[:, :coarse_token_ids.shape[-1]]
+        print(f"offsets.shape {offsets.shape}")
         coarse_token_ids = coarse_token_ids + offsets
+        print(f"coarse_token_ids.shape after offsets {coarse_token_ids.shape}")
 
+        # semantic embedding is embedding (num_semantic_tokens + 1, dim)
+        # num_semantic_tokens is semantic's codebook size, dim is the dimension of an individual coarse embedding vector
+        # so self.semantic_embedding takes semantic token (+1 is for EOS) to coarse embedding
         semantic_tokens = get_embeds(self.semantic_embedding, semantic_token_ids)
-        coarse_tokens = self.coarse_embedding(coarse_token_ids)
+        print(f"semantic_tokens.shape {semantic_tokens.shape}")
+        coarse_tokens = self.coarse_embedding(coarse_token_ids) # num_coarse_quantizers * codebook_size_with_eos, dim
+        # not sure why this is, ok you gotta convert semantic token ids to dim-D tokens, but why coarse too?
+        print(f"coarse_tokens.shape {coarse_tokens.shape}, example coarse_token_ids: {coarse_token_ids[0][0]} and {coarse_tokens[0][0]}")
 
         coarse_quantize_tokens = repeat(self.coarse_quantize_embedding.weight, 'q d -> (n q) d', n = ceil_div(coarse_token_ids.shape[-1], self.num_coarse_quantizers))
         coarse_quantize_tokens = coarse_quantize_tokens[:coarse_token_ids.shape[-1], ...]
@@ -1082,7 +1092,7 @@ class SemanticTransformerWrapper(nn.Module):
             ids = prime_ids
         else:
             ids = torch.empty((batch_size, 0), dtype = torch.long, device = device)
-        print(f"ids.shape: {ids.shape} and prime_wave {exists(prime_wave)}")
+        # print(f"ids.shape: {ids.shape} and prime_wave {exists(prime_wave)}")
 
         if self.unique_consecutive:
             ids = batch_unique_consecutive(ids, pad_value = self.pad_id)
@@ -1137,7 +1147,7 @@ class SemanticTransformerWrapper(nn.Module):
 
             last_logit_indices += 1
 
-        print(f"before masking eos, sample_semantic_ids.shape: {sample_semantic_ids.shape}")
+        # print(f"before masking eos, sample_semantic_ids.shape: {sample_semantic_ids.shape}")
         sample_semantic_ids = mask_out_after_eos_id(sample_semantic_ids, self.eos_id, keep_eos = False)
 
         return sample_semantic_ids
