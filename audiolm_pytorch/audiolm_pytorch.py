@@ -1345,8 +1345,11 @@ class CoarseTransformerWrapper(nn.Module):
                 _, indices, _ = self.soundstream(raw_wave_for_soundstream, return_encoded = True)
                 coarse_token_ids, _ = indices[..., :self.num_coarse_quantizers], indices[..., self.num_coarse_quantizers:]
 
+        print(f"before rearranging: semantic_token_ids.shape {semantic_token_ids.shape}, coarse_token_ids.shape {coarse_token_ids.shape}")
         semantic_token_ids = rearrange(semantic_token_ids, 'b ... -> b (...)')
         coarse_token_ids = rearrange(coarse_token_ids, 'b ... -> b (...)')
+        print(
+            f"after rearranging: semantic_token_ids.shape {semantic_token_ids.shape}, coarse_token_ids.shape {coarse_token_ids.shape}")
 
         if self.training:
             semantic_token_ids = append_eos_id(semantic_token_ids, self.transformer.semantic_eos_id)
