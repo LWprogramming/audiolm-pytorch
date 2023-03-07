@@ -701,13 +701,13 @@ class CoarseTransformer(nn.Module):
         print(f"after rearranging: semantic_token_ids.shape {semantic_token_ids.shape}, coarse_token_ids.shape {coarse_token_ids.shape}")
 
         offsets = self.codebook_size * torch.arange(self.num_coarse_quantizers, device = device) # [0, 500, 1000, 1500, ...]
-        print(f"coarse_token_ids.shape {coarse_token_ids.shape}")
+        print(f"coarse_token_ids.shape {coarse_token_ids.shape}") # should be batch x all tokens in row major order
         offsets = repeat(offsets, 'q -> 1 (n q)', n = ceil_div(coarse_token_ids.shape[-1], self.num_coarse_quantizers))
         print(f"offsets.shape {offsets.shape}")
         offsets = offsets[:, :coarse_token_ids.shape[-1]]
         print(f"offsets.shape {offsets.shape}")
         coarse_token_ids = coarse_token_ids + offsets
-        print(f"coarse_token_ids.shape after offsets {coarse_token_ids.shape}")
+        print(f"coarse_token_ids.shape after offsets {coarse_token_ids.shape}. sneak peek at elements {coarse_token_ids}")
 
         # semantic embedding is embedding (num_semantic_tokens + 1, dim)
         # num_semantic_tokens is semantic's codebook size, dim is the dimension of an individual coarse embedding vector
@@ -718,15 +718,22 @@ class CoarseTransformer(nn.Module):
         # not sure why this is, ok you gotta convert semantic token ids to dim-D tokens, but why coarse too?
         print(f"coarse_tokens.shape {coarse_tokens.shape}, example coarse_token_ids: {coarse_token_ids[0][0]} and {coarse_tokens[0][0]}")
 
+        # q = num quantizers, d = embedding dim = 512 by default
+        # n = num coarse tokens per quantizer (what does this mean?)
+        # and then cut out the first T tokens, where T is the total number of coarse tokens we start with in coarse_token_ids
+        # (why? subsequent add is elementwise right)
         coarse_quantize_tokens = repeat(self.coarse_quantize_embedding.weight, 'q d -> (n q) d', n = ceil_div(coarse_token_ids.shape[-1], self.num_coarse_quantizers))
         coarse_quantize_tokens = coarse_quantize_tokens[:coarse_token_ids.shape[-1], ...]
+        print(f"coarse_quantize_tokens.shape {coarse_quantize_tokens.shape} and the tokens are {coarse_quantize_tokens}")
         coarse_tokens = coarse_tokens + coarse_quantize_tokens
 
         semantic_seq_len = semantic_tokens.shape[1]
 
+        # 1 start token per batch
         semantic_start_tokens = repeat(self.semantic_start_token, 'd -> b 1 d', b = b)
         coarse_start_tokens = repeat(self.coarse_start_token, 'd -> b 1 d', b = b)
-
+        print(f"checking if semantic tokens and coarse have eos or something. {semantic_tokens[0][-1]} and coarse {coarse_tokens[0][-1]}")
+        # just concats them directly no fancy tricks beyond that
         tokens = torch.cat((
             semantic_start_tokens,
             semantic_tokens,
@@ -734,8 +741,12 @@ class CoarseTransformer(nn.Module):
             coarse_tokens
         ), dim = 1)
 
+        # forward pass of underlying transformer called here
         tokens = self.transformer(tokens, context = text_embeds, self_attn_mask = self_attn_mask, context_mask = text_mask)
 
+        # how does this separation work so cleanly? is it just the eos token? but it doesn't hit 100% of the time right??
+        # maybe it's because of self_attn_mask TODO look at that next
+        print(f"checking what's that unknown token in the middle: {tokens[:, semantic_seq_len]}")
         pred_semantic_tokens, pred_coarse_tokens = tokens[:, :semantic_seq_len], tokens[:, (semantic_seq_len + 1):]
 
         # semantic logits
@@ -751,19 +762,23 @@ class CoarseTransformer(nn.Module):
 
         pred_coarse_tokens_groupable = rearrange(pred_coarse_tokens_groupable, 'b (n q) d -> b n q d', q = self.num_coarse_quantizers)
 
+        # q = num_coarse_quantizers, c = codebook_size_with_eos, d=dim, b=batch, n=predicted coarse token length
+        # so for each coarse token, map it to nearest set of quantizer vectors
         coarse_logits_groupable = einsum('q c d, b n q d -> b n q c', self.coarse_logit_weights, pred_coarse_tokens_groupable)
 
         coarse_logits_groupable = rearrange(coarse_logits_groupable, 'b n q c -> b (n q) c')
 
         remainder_num_quantizers = pred_coarse_tokens_remainder.shape[1]
 
+        # something about sequence remainder but i'm not entirely sure
         if remainder_num_quantizers > 0:
             coarse_logits_remainder = einsum('q c d, b q d -> b q c', self.coarse_logit_weights[:remainder_num_quantizers], pred_coarse_tokens_remainder)
 
             coarse_logits = torch.cat((coarse_logits_groupable, coarse_logits_remainder), dim = 1)
         else:
             coarse_logits = coarse_logits_groupable
-
+        # predict next semantic based on current (which are only conditioned on previously-seen semantic + coarse)
+        # and next coarse based on previous semantic + coarse AND current timesteps more-coarse quantizer results
         return semantic_logits, coarse_logits
 
 class FineTransformer(nn.Module):
@@ -1651,13 +1666,13 @@ class AudioLM(nn.Module):
     def __init__(
         self,
         *,
-        wav2vec: Optional[Union[FairseqVQWav2Vec, HubertWithKmeans]], 
+        wav2vec: Optional[Union[FairseqVQWav2Vec, HubertWithKmeans]],
         soundstream: SoundStream,
         semantic_transformer: SemanticTransformer,
         coarse_transformer: CoarseTransformer,
         fine_transformer: FineTransformer,
         audio_conditioner: Optional[AudioConditionerBase] = None,
-        unique_consecutive = True
+        unique_consecutive = True,
     ):
         super().__init__()
 
