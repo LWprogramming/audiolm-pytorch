@@ -47,6 +47,7 @@ class HubertWithKmeans(nn.Module):
             self.model = model[0]
         else:
             self.model = HubertModel.from_pretrained("m-a-p/MERT-v0")
+            self.layer = 7 # hardcoded to pull out from this layer in MERT. TODO refactor this later
 
         kmeans_path = Path(kmeans_path)
         assert kmeans_path.exists(), f'path {kmeans_path} does not exist'
