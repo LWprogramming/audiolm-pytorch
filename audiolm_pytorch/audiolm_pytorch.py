@@ -707,7 +707,7 @@ class CoarseTransformer(nn.Module):
         offsets = offsets[:, :coarse_token_ids.shape[-1]]
         print(f"offsets.shape {offsets.shape}")
         coarse_token_ids = coarse_token_ids + offsets
-        print(f"coarse_token_ids.shape after offsets {coarse_token_ids.shape}. sneak peek at elements {coarse_token_ids}")
+        print(f"coarse_token_ids.shape after offsets {coarse_token_ids.shape}.")
 
         # semantic embedding is embedding (num_semantic_tokens + 1, dim)
         # num_semantic_tokens is semantic's codebook size, dim is the dimension of an individual coarse embedding vector
@@ -716,7 +716,7 @@ class CoarseTransformer(nn.Module):
         print(f"semantic_tokens.shape {semantic_tokens.shape}")
         coarse_tokens = self.coarse_embedding(coarse_token_ids) # num_coarse_quantizers * codebook_size_with_eos, dim
         # not sure why this is, ok you gotta convert semantic token ids to dim-D tokens, but why coarse too?
-        print(f"coarse_tokens.shape {coarse_tokens.shape}, example coarse_token_ids: {coarse_token_ids[0][0]} and {coarse_tokens[0][0]}")
+        print(f"coarse_tokens.shape {coarse_tokens.shape}, example coarse_token_ids: {coarse_token_ids[0][0]}}")
 
         # q = num quantizers, d = embedding dim = 512 by default
         # n = num coarse tokens per quantizer (what does this mean?)
@@ -724,7 +724,7 @@ class CoarseTransformer(nn.Module):
         # (why? subsequent add is elementwise right)
         coarse_quantize_tokens = repeat(self.coarse_quantize_embedding.weight, 'q d -> (n q) d', n = ceil_div(coarse_token_ids.shape[-1], self.num_coarse_quantizers))
         coarse_quantize_tokens = coarse_quantize_tokens[:coarse_token_ids.shape[-1], ...]
-        print(f"coarse_quantize_tokens.shape {coarse_quantize_tokens.shape} and the tokens are {coarse_quantize_tokens}")
+        print(f"coarse_quantize_tokens.shape {coarse_quantize_tokens.shape}")
         coarse_tokens = coarse_tokens + coarse_quantize_tokens
 
         semantic_seq_len = semantic_tokens.shape[1]
@@ -732,7 +732,7 @@ class CoarseTransformer(nn.Module):
         # 1 start token per batch
         semantic_start_tokens = repeat(self.semantic_start_token, 'd -> b 1 d', b = b)
         coarse_start_tokens = repeat(self.coarse_start_token, 'd -> b 1 d', b = b)
-        print(f"checking if semantic tokens and coarse have eos or something. {semantic_tokens[0][-1]} and coarse {coarse_tokens[0][-1]}")
+        # print(f"checking if semantic tokens and coarse have eos or something. {semantic_tokens[0][-1]} and coarse {coarse_tokens[0][-1]}")
         # just concats them directly no fancy tricks beyond that
         tokens = torch.cat((
             semantic_start_tokens,
@@ -746,7 +746,7 @@ class CoarseTransformer(nn.Module):
 
         # how does this separation work so cleanly? is it just the eos token? but it doesn't hit 100% of the time right??
         # maybe it's because of self_attn_mask TODO look at that next
-        print(f"checking what's that unknown token in the middle: {tokens[:, semantic_seq_len]}")
+        # print(f"checking what's that unknown token in the middle: {tokens[:, semantic_seq_len]}")
         pred_semantic_tokens, pred_coarse_tokens = tokens[:, :semantic_seq_len], tokens[:, (semantic_seq_len + 1):]
 
         # semantic logits
