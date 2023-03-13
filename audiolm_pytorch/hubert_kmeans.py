@@ -38,6 +38,7 @@ class HubertWithKmeans(nn.Module):
         self.target_sample_hz = target_sample_hz
         self.seq_len_multiple_of = seq_len_multiple_of
 
+        self.use_mert = use_mert
         if not use_mert:
             model_path = Path(checkpoint_path)
             assert model_path.exists(), f'path {checkpoint_path} does not exist'
@@ -83,7 +84,7 @@ class HubertWithKmeans(nn.Module):
         embed = self.model(wav_input, features_only = True)
         # print(f"embed.keys(): {embed.keys()}")
         # padding_mask is also a key but it's None
-        # print(f"embed['x'] shape: {embed['x'].shape}, embed['features'].shape: {embed['features'].shape}")
+        print(f"embed['x'] shape: {embed['x'].shape}, embed['features'].shape: {embed['features'].shape}")
         embed, packed_shape = pack([embed['x']], '* d')
         # print(f"wav_input shape: {wav_input.shape}, embed shape: {embed.shape}, packed_shape: {packed_shape}")
 
