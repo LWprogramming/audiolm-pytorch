@@ -717,8 +717,7 @@ class CoarseTransformer(nn.Module):
         print(f"semantic_tokens.shape {semantic_tokens.shape}")
         coarse_tokens = self.coarse_embedding(coarse_token_ids) # num_coarse_quantizers * codebook_size_with_eos, dim
         # not sure why this is, ok you gotta convert semantic token ids to dim-D tokens, but why coarse too?
-        print(f"coarse_tokens.shape {coarse_tokens.shape}") # TODO: suspicious, why is coarse_token_ids length 0??
-        # print(f"coarse_tokens.shape {coarse_tokens.shape}, example coarse_token_ids: {coarse_token_ids[0][0]}")
+        print(f"coarse_tokens.shape {coarse_tokens.shape}") # autoregressively generating so the first forward pass has coarse_token_ids length 0
 
         # q = num quantizers, d = embedding dim = 512 by default
         # n = num coarse tokens per quantizer (what does this mean?)
