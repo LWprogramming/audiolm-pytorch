@@ -676,7 +676,7 @@ class CoarseTransformer(nn.Module):
         cond_drop_prob = None,
         return_only_coarse_logits = False
     ):
-        print("*" * 20 + "\nEntered CoarseTransformer forward pass\n" + "*" * 20)
+        # print("*" * 20 + "\nEntered CoarseTransformer forward pass\n" + "*" * 20)
         b, device = semantic_token_ids.shape[0], semantic_token_ids.device
 
         has_text = exists(text) or exists(text_embeds)
@@ -701,10 +701,10 @@ class CoarseTransformer(nn.Module):
         # afaict in the standard case without any text-conditioning, this reshape is a no-op
         # print(f"before rearranging: semantic_token_ids.shape {semantic_token_ids.shape}, coarse_token_ids.shape {coarse_token_ids.shape}")
         coarse_token_ids, semantic_token_ids = map(lambda t: rearrange(t, 'b ... -> b (...)'), (coarse_token_ids, semantic_token_ids))
-        print(f"after rearranging: semantic_token_ids.shape {semantic_token_ids.shape}, coarse_token_ids.shape {coarse_token_ids.shape}")
+        # print(f"after rearranging: semantic_token_ids.shape {semantic_token_ids.shape}, coarse_token_ids.shape {coarse_token_ids.shape}")
 
         offsets = self.codebook_size * torch.arange(self.num_coarse_quantizers, device = device) # [0, 500, 1000, 1500, ...]
-        print(f"coarse_token_ids.shape {coarse_token_ids.shape}") # should be batch x all tokens in row major order
+        # print(f"coarse_token_ids.shape {coarse_token_ids.shape}") # should be batch x all tokens in row major order
         # only keep as many offsets as you have coarse tokens
         offsets = repeat(offsets, 'q -> 1 (n q)', n = ceil_div(coarse_token_ids.shape[-1], self.num_coarse_quantizers))
         # print(f"offsets.shape {offsets.shape}")
@@ -717,17 +717,17 @@ class CoarseTransformer(nn.Module):
         # num_semantic_tokens is semantic's codebook size, dim is a coarse vector dimension
         # so self.semantic_embedding takes semantic token (+1 is for EOS) to coarse embedding
         semantic_tokens = get_embeds(self.semantic_embedding, semantic_token_ids)
-        print(f"semantic_tokens.shape {semantic_tokens.shape}") # batch x num_semantic_tokens x dim
+        # print(f"semantic_tokens.shape {semantic_tokens.shape}") # batch x num_semantic_tokens x dim
         coarse_tokens = self.coarse_embedding(coarse_token_ids) # batch x num_coarse_token_ids x dim
         # convert both semantic and coarse token ids to dim-D vectors so you can concatenate them
-        print(f"coarse_tokens.shape {coarse_tokens.shape}") # autoregressively generating so the first forward pass has coarse_token_ids length 0
+        # print(f"coarse_tokens.shape {coarse_tokens.shape}") # autoregressively generating so the first forward pass has coarse_token_ids length 0
 
         # q = num quantizers, d = embedding dim = 512 by default
         # n = num coarse tokens per quantizer (what does this mean?)
         # and then cut out the first T tokens, where T is the total number of coarse tokens we start with in coarse_token_ids
         coarse_quantize_tokens = repeat(self.coarse_quantize_embedding.weight, 'q d -> (n q) d', n = ceil_div(coarse_token_ids.shape[-1], self.num_coarse_quantizers))
         coarse_quantize_tokens = coarse_quantize_tokens[:coarse_token_ids.shape[-1], ...]
-        print(f"coarse_quantize_tokens.shape {coarse_quantize_tokens.shape}") # num_coarse_tokens x dim...
+        # print(f"coarse_quantize_tokens.shape {coarse_quantize_tokens.shape}") # num_coarse_tokens x dim...
         coarse_tokens = coarse_tokens + coarse_quantize_tokens # ...so this is just elementwise add
 
         semantic_seq_len = semantic_tokens.shape[1]
