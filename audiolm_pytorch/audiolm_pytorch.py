@@ -1226,7 +1226,6 @@ class SemanticTransformerWrapper(nn.Module):
 
         if not exists(semantic_token_ids):
             print(f"raw wave provided for semantic training. raw_wave.shape {raw_wave.shape}")
-            raise AssertionError("let's just dump a stack trace and see what's calling this")
             assert exists(self.wav2vec), 'VQWav2Vec must be be provided if given raw wave for training'
             semantic_token_ids = self.wav2vec(raw_wave, flatten = False)
 
