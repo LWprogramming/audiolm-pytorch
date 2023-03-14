@@ -84,6 +84,7 @@ class HubertWithKmeans(nn.Module):
         embed = self.model(wav_input, features_only = True)
         # print(f"embed.keys(): {embed.keys()}")
         # padding_mask is also a key but it's None
+        print(f"type(wav_input) {type(wav_input)} and shape: {wav_input.shape}")
         print(f"embed['x'] shape: {embed['x'].shape}, embed['features'].shape: {embed['features'].shape}")
         embed, packed_shape = pack([embed['x']], '* d')
         # print(f"wav_input shape: {wav_input.shape}, embed shape: {embed.shape}, packed_shape: {packed_shape}")
