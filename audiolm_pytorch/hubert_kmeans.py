@@ -74,6 +74,7 @@ class HubertWithKmeans(nn.Module):
         input_sample_hz = None
     ):
         device = wav_input.device
+        print(f"wav input shape before processing: {wav_input.shape}")
 
         if exists(input_sample_hz):
             wav_input = resample(wav_input, input_sample_hz, self.target_sample_hz)
@@ -84,8 +85,9 @@ class HubertWithKmeans(nn.Module):
         embed = self.model(wav_input, features_only = True)
         # print(f"embed.keys(): {embed.keys()}")
         # padding_mask is also a key but it's None
-        print(f"type(wav_input) {type(wav_input)} and shape: {wav_input.shape}")
-        print(f"embed['x'] shape: {embed['x'].shape}, embed['features'].shape: {embed['features'].shape}")
+        print(f"type(wav_input) {type(wav_input)} and shape: {wav_input.shape}") # 1 x 10240 in the example that was loaded, varies across datasets of course
+        print(f"embed['x'] shape: {embed['x'].shape}, embed['features'].shape: {embed['features'].shape}") # 1 x 31 x 768 for both
+
         embed, packed_shape = pack([embed['x']], '* d')
         # print(f"wav_input shape: {wav_input.shape}, embed shape: {embed.shape}, packed_shape: {packed_shape}")
 

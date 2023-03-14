@@ -1225,6 +1225,7 @@ class SemanticTransformerWrapper(nn.Module):
             text_embeds = self.audio_conditioner(wavs = raw_wave, namespace = 'semantic')
 
         if not exists(semantic_token_ids):
+            print(f"raw wave provided. raw_wave.shape {raw_wave.shape}")
             assert exists(self.wav2vec), 'VQWav2Vec must be be provided if given raw wave for training'
             semantic_token_ids = self.wav2vec(raw_wave, flatten = False)
 
@@ -1400,6 +1401,7 @@ class CoarseTransformerWrapper(nn.Module):
             text_embeds = self.audio_conditioner(wavs = raw_wave, namespace = 'coarse') # technically audio embeds, but shared text-audio joint embedding space for mulan
 
         if not exists(semantic_token_ids):
+            print(f"raw wave provided for coarse training. raw_wave.shape {raw_wave.shape}")
             assert exists(self.wav2vec), 'VQWav2Vec must be be provided if given raw wave for training'
             semantic_token_ids = self.wav2vec(raw_wave, flatten = False)
 
