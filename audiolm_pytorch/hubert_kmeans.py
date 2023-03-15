@@ -89,14 +89,15 @@ class HubertWithKmeans(nn.Module):
             #   "input_values": processed array of wav_input (it's not copied directly by self.processor),
             #   "attention_mask": equivalent of torch.ones(mert_input["input_values"].shape)
             # }
+            # "input_values" shape is 1 x wav_input.shape which includes batches. not sure why it prepends a 1
             sampling_rate = input_sample_hz if exists(input_sample_hz) else self.target_sample_hz
-            mert_input = self.processor(wav_input[0], sampling_rate=sampling_rate, return_tensors="pt").cuda()
-            # TODO: figure out how to do batches because this is really bad lol-- just take the first entry in wav_input disgrearding batches
+            mert_input = self.processor(wav_input, sampling_rate=sampling_rate, return_tensors="pt")
             # also what's with the processor going to cpu?
             print(f"mert shape {mert_input['input_values'].shape}")
-            outputs = self.model(**mert_input, output_hidden_states=True)
-            all_layer_hidden_states = torch.stack(outputs.hidden_states).squeeze() # 13 layers x timesteps x 768 feature_dim
-            embed = all_layer_hidden_states[self.layer] # timesteps x 768 feature_dim
+            outputs = self.model(**mert_input, output_hidden_states=True) # 1 x everything.
+            all_layer_hidden_states = torch.stack(outputs.hidden_states).squeeze() # 1 x 13 layers x timesteps x 768 feature_dim
+            print(f"all_layer_hidden_states.shape {all_layer_hidden_states.shape}")
+            embed = all_layer_hidden_states[0][self.layer] # timesteps x 768 feature_dim TODO: maybe use pack here as well? lol
             packed_shape = embed.shape
         else:
             embed = self.model(wav_input, features_only = True)
