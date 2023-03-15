@@ -90,7 +90,8 @@ class HubertWithKmeans(nn.Module):
             #   "attention_mask": equivalent of torch.ones(mert_input["input_values"].shape)
             # }
             sampling_rate = input_sample_hz if exists(input_sample_hz) else self.target_sample_hz
-            mert_input = self.processor(wav_input, sampling_rate=sampling_rate, return_tensors="pt")
+            mert_input = self.processor(wav_input[0], sampling_rate=sampling_rate, return_tensors="pt")
+            # TODO: figure out how to do batches because this is really bad lol-- just take the first entry in wav_input disgrearding batches
             print(f"mert shape {mert_input['input_values'].shape}")
             outputs = self.model(**mert_input, output_hidden_states=True)
             all_layer_hidden_states = torch.stack(outputs.hidden_states).squeeze() # 13 layers x timesteps x 768 feature_dim
