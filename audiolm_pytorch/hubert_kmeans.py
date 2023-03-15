@@ -47,10 +47,10 @@ class HubertWithKmeans(nn.Module):
             model, *_ = fairseq.checkpoint_utils.load_model_ensemble_and_task(load_model_input)
             self.model = model[0]
         else:
-            self.model = HubertModel.from_pretrained("m-a-p/MERT-v0")
-            print(f"model is nn module? {isinstance(self.model, nn.Module)}")
-            self.processor = Wav2Vec2Processor.from_pretrained("facebook/hubert-large-ls960-ft")
-            print(f"processor is nn module? {isinstance(self.processor, nn.Module)}")
+            self.model = HubertModel.from_pretrained("m-a-p/MERT-v0") # is nn.Module
+            # print(f"model is nn module? {isinstance(self.model, nn.Module)}")
+            self.processor = Wav2Vec2Processor.from_pretrained("facebook/hubert-large-ls960-ft") # is not nn.Module
+            # print(f"processor is nn module? {isinstance(self.processor, nn.Module)}")
             self.layer = 7 # hardcoded to pull out from this layer in MERT. TODO refactor this later
 
         kmeans_path = Path(kmeans_path)
@@ -77,7 +77,7 @@ class HubertWithKmeans(nn.Module):
         input_sample_hz = None
     ):
         device = wav_input.device
-        print(f"wav input shape before processing: {wav_input.shape}")
+        print(f"wav input shape before processing: {wav_input.shape} and device: {wav_input.device}")
 
         if exists(input_sample_hz):
             wav_input = resample(wav_input, input_sample_hz, self.target_sample_hz)
@@ -114,17 +114,15 @@ class HubertWithKmeans(nn.Module):
             # this is the number of tokens-- derived via 16 KHz sampling to 50 Hz tokens -> 320x reduction, so
             # 10240 / 320 = 32 rounds down to 31.
             embed, packed_shape = pack([embed['x']], '* d')
-            # embed is 31 x 768, packed_shape is 1 x 31
-        # for non-mert: self.use_mert: False, wav_input shape: torch.Size([1, 10240]), embed shape: torch.Size([31, 768]), packed_shape: [torch.Size([1, 31])]
-        # for     mert: self.use_mert: True, wav_input shape: torch.Size([1, 10240]), embed shape: torch.Size([31, 768]), packed_shape: torch.Size([1, 31])
+        # wav_input shape: torch.Size([1, 10240]), embed shape: torch.Size([31, 768]), packed_shape: [torch.Size([1, 31])]
         print(f"self.use_mert: {self.use_mert}, wav_input shape: {wav_input.shape}, embed shape: {embed.shape}, packed_shape: {packed_shape}")
 
         codebook_indices = self.kmeans.predict(embed.cpu().detach().numpy())
 
         codebook_indices = torch.from_numpy(codebook_indices).to(device).long()
-        # print(f"codebook_indices before unpacking: {codebook_indices.shape}")
+        print(f"codebook_indices before unpacking: {codebook_indices.shape}")
         if flatten:
             return codebook_indices
         codebook_indices, = unpack(codebook_indices, packed_shape, '*')
-        # print(f"codebook_indices after unpacking: {codebook_indices.shape}")
+        print(f"codebook_indices after unpacking: {codebook_indices.shape}")
         return codebook_indices
