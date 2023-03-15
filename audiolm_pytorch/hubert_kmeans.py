@@ -91,6 +91,7 @@ class HubertWithKmeans(nn.Module):
             # }
             sampling_rate = input_sample_hz if exists(input_sample_hz) else self.target_sample_hz
             mert_input = self.processor(wav_input, sampling_rate=sampling_rate, return_tensors="pt")
+            print(f"mert shape {mert_input['input_values'].shape}")
             outputs = self.model(**mert_input, output_hidden_states=True)
             all_layer_hidden_states = torch.stack(outputs.hidden_states).squeeze() # 13 layers x timesteps x 768 feature_dim
             embed = all_layer_hidden_states[self.layer] # timesteps x 768 feature_dim
@@ -104,7 +105,7 @@ class HubertWithKmeans(nn.Module):
             # this is the number of tokens-- derived via 16 KHz sampling to 50 Hz tokens -> 320x reduction, so
             # 10240 / 320 = 32 rounds down to 31.
             embed, packed_shape = pack([embed['x']], '* d')
-            # print(f"wav_input shape: {wav_input.shape}, embed shape: {embed.shape}, packed_shape: {packed_shape}")
+        print(f"self.use_mert: {self.use_mert}, wav_input shape: {wav_input.shape}, embed shape: {embed.shape}, packed_shape: {packed_shape}")
 
         codebook_indices = self.kmeans.predict(embed.cpu().detach().numpy())
 
