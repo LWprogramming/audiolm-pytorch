@@ -82,14 +82,22 @@ class HubertWithKmeans(nn.Module):
         if exists(self.seq_len_multiple_of):
             wav_input = curtail_to_multiple(wav_input, self.seq_len_multiple_of)
 
-        embed = self.model(wav_input, features_only = True)
-        # print(f"embed.keys(): {embed.keys()}")
-        # padding_mask is also a key but it's None
-        print(f"type(wav_input) {type(wav_input)} and shape: {wav_input.shape}") # 1 x 10240 in the example that was loaded, varies across datasets of course
-        print(f"embed['x'] shape: {embed['x'].shape}, embed['features'].shape: {embed['features'].shape}") # 1 x 31 x 768 for both
-
-        embed, packed_shape = pack([embed['x']], '* d')
-        # print(f"wav_input shape: {wav_input.shape}, embed shape: {embed.shape}, packed_shape: {packed_shape}")
+        if self.use_mert:
+            # wav_input is batch x samples
+            outputs = self.model(**wav_input, output_hidden_states=True)
+            all_layer_hidden_states = torch.stack(outputs.hidden_states).squeeze() # 13 layers x timesteps x 768 feature_dim
+            embed = all_layer_hidden_states[self.layer] # timesteps x 768 feature_dim
+            packed_shape = embed.shape
+        else:
+            embed = self.model(wav_input, features_only = True)
+            # print(f"embed.keys(): {embed.keys()}")
+            # padding_mask is also a key but it's None
+            print(f"type(wav_input) {type(wav_input)} and shape: {wav_input.shape}") # 1 x 10240 in the example, dependent on max_length or whatever that parameter is
+            print(f"embed['x'] shape: {embed['x'].shape}, embed['features'].shape: {embed['features'].shape}") # 1 x 31 x 768 for both.
+            # this is the number of tokens-- derived via 16 KHz sampling to 50 Hz tokens -> 320x reduction, so
+            # 10240 / 320 = 32 rounds down to 31.
+            embed, packed_shape = pack([embed['x']], '* d')
+            # print(f"wav_input shape: {wav_input.shape}, embed shape: {embed.shape}, packed_shape: {packed_shape}")
 
         codebook_indices = self.kmeans.predict(embed.cpu().detach().numpy())
 
