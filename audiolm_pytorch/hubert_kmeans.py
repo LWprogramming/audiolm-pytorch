@@ -47,8 +47,10 @@ class HubertWithKmeans(nn.Module):
             model, *_ = fairseq.checkpoint_utils.load_model_ensemble_and_task(load_model_input)
             self.model = model[0]
         else:
-            self.model = HubertModel.from_pretrained("m-a-p/MERT-v0")
-            self.processor = Wav2Vec2Processor.from_pretrained("facebook/hubert-large-ls960-ft")
+            self.model = HubertModel.from_pretrained("m-a-p/MERT-v0").cuda()
+            print(f"model is nn module? {isinstance(self.model, nn.Module)}")
+            self.processor = Wav2Vec2Processor.from_pretrained("facebook/hubert-large-ls960-ft").cuda()
+            print(f"processor is nn module? {isinstance(self.processor, nn.Module)}")
             self.layer = 7 # hardcoded to pull out from this layer in MERT. TODO refactor this later
 
         kmeans_path = Path(kmeans_path)
