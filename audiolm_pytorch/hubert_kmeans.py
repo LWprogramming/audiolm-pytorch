@@ -47,9 +47,9 @@ class HubertWithKmeans(nn.Module):
             model, *_ = fairseq.checkpoint_utils.load_model_ensemble_and_task(load_model_input)
             self.model = model[0]
         else:
-            self.model = HubertModel.from_pretrained("m-a-p/MERT-v0").cuda()
+            self.model = HubertModel.from_pretrained("m-a-p/MERT-v0")
             print(f"model is nn module? {isinstance(self.model, nn.Module)}")
-            self.processor = Wav2Vec2Processor.from_pretrained("facebook/hubert-large-ls960-ft").cuda()
+            self.processor = Wav2Vec2Processor.from_pretrained("facebook/hubert-large-ls960-ft")
             print(f"processor is nn module? {isinstance(self.processor, nn.Module)}")
             self.layer = 7 # hardcoded to pull out from this layer in MERT. TODO refactor this later
 
@@ -94,11 +94,11 @@ class HubertWithKmeans(nn.Module):
             # "input_values" shape is 1 x wav_input.shape which includes batches. not sure why it prepends a 1
             sampling_rate = input_sample_hz if exists(input_sample_hz) else self.target_sample_hz
             mert_input = self.processor(wav_input[0], sampling_rate=sampling_rate, return_tensors="pt")
-            # also what's with the processor going to cpu?
-            print(f"mert shape {mert_input['input_values'].shape}")
-            mert_input["attention_mask"].cuda() # TODO: is there a way to put this in mert_input? not a fan of doing this in cpu
+            mert_input["attention_mask"].cuda()  # TODO: is there a way to put this in mert_input? not a fan of doing this in cpu
             mert_input["input_values"].cuda()
+            # also what's with the processor going to cpu?
             print(f"wav_input.is_cuda {wav_input.is_cuda}")
+            print(f"mert shape {mert_input['input_values'].shape} and keys {mert_input.keys()}")
             outputs = self.model(**mert_input, output_hidden_states=True) # 1 x everything.
             all_layer_hidden_states = torch.stack(outputs.hidden_states).squeeze() # 1 x 13 layers x timesteps x 768 feature_dim
             print(f"all_layer_hidden_states.shape {all_layer_hidden_states.shape} and device {all_layer_hidden_states.device}")
