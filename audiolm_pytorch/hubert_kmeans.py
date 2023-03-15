@@ -91,13 +91,15 @@ class HubertWithKmeans(nn.Module):
             # }
             # "input_values" shape is 1 x wav_input.shape which includes batches. not sure why it prepends a 1
             sampling_rate = input_sample_hz if exists(input_sample_hz) else self.target_sample_hz
-            mert_input = self.processor(wav_input, sampling_rate=sampling_rate, return_tensors="pt")
+            mert_input = self.processor(wav_input[0], sampling_rate=sampling_rate, return_tensors="pt")
             # also what's with the processor going to cpu?
             print(f"mert shape {mert_input['input_values'].shape}")
+            mert_input["attention_mask"].cuda() # TODO: is there a way to put this in mert_input? not a fan of doing this in cpu
+            mert_input["input_values"].cuda()
             outputs = self.model(**mert_input, output_hidden_states=True) # 1 x everything.
             all_layer_hidden_states = torch.stack(outputs.hidden_states).squeeze() # 1 x 13 layers x timesteps x 768 feature_dim
             print(f"all_layer_hidden_states.shape {all_layer_hidden_states.shape}")
-            embed = all_layer_hidden_states[0][self.layer] # timesteps x 768 feature_dim TODO: maybe use pack here as well? lol
+            embed = all_layer_hidden_states[self.layer] # timesteps x 768 feature_dim
             packed_shape = embed.shape
         else:
             embed = self.model(wav_input, features_only = True)
