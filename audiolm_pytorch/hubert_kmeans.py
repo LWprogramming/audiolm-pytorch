@@ -84,7 +84,7 @@ class HubertWithKmeans(nn.Module):
 
         if self.use_mert:
             # wav_input is batch x samples
-            outputs = self.model(**wav_input, output_hidden_states=True)
+            outputs = self.model(wav_input, output_hidden_states=True)
             all_layer_hidden_states = torch.stack(outputs.hidden_states).squeeze() # 13 layers x timesteps x 768 feature_dim
             embed = all_layer_hidden_states[self.layer] # timesteps x 768 feature_dim
             packed_shape = embed.shape
