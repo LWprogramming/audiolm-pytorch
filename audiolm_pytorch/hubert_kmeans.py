@@ -104,7 +104,7 @@ class HubertWithKmeans(nn.Module):
             all_layer_hidden_states = torch.stack(outputs.hidden_states).squeeze() # 1 x 13 layers x timesteps x 768 feature_dim
             print(f"all_layer_hidden_states.shape {all_layer_hidden_states.shape} and device {all_layer_hidden_states.device}")
             embed = all_layer_hidden_states[self.layer] # timesteps x 768 feature_dim
-            packed_shape = torch.Size([1, embed.shape[0]]) # extremely hacky way to replicate einops.pack behavior for packed_shape
+            packed_shape = [torch.Size([1, embed.shape[0]])] # extremely hacky way to replicate einops.pack behavior for packed_shape
         else:
             embed = self.model(wav_input, features_only = True)
             # print(f"embed.keys(): {embed.keys()}")
@@ -115,6 +115,8 @@ class HubertWithKmeans(nn.Module):
             # 10240 / 320 = 32 rounds down to 31.
             embed, packed_shape = pack([embed['x']], '* d')
             # embed is 31 x 768, packed_shape is 1 x 31
+        # for non-mert: self.use_mert: False, wav_input shape: torch.Size([1, 10240]), embed shape: torch.Size([31, 768]), packed_shape: [torch.Size([1, 31])]
+        # for     mert: self.use_mert: True, wav_input shape: torch.Size([1, 10240]), embed shape: torch.Size([31, 768]), packed_shape: torch.Size([1, 31])
         print(f"self.use_mert: {self.use_mert}, wav_input shape: {wav_input.shape}, embed shape: {embed.shape}, packed_shape: {packed_shape}")
 
         codebook_indices = self.kmeans.predict(embed.cpu().detach().numpy())
