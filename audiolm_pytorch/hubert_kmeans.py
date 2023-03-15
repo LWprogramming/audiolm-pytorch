@@ -93,7 +93,7 @@ class HubertWithKmeans(nn.Module):
             # }
             # "input_values" shape is 1 x wav_input.shape which includes batches. not sure why it prepends a 1
             sampling_rate = input_sample_hz if exists(input_sample_hz) else self.target_sample_hz
-            mert_input = self.processor(wav_input[0], sampling_rate=sampling_rate, return_tensors="pt")
+            mert_input = self.processor(wav_input[0], sampling_rate=sampling_rate, return_tensors="pt") # TODO: is there a problem with batching here? feel like something is wrong here.
             # print(f"mert_input devices: attn mask {mert_input['attention_mask'].device}, input_values {mert_input['input_values'].device}")
             mert_input["attention_mask"] = mert_input["attention_mask"].cuda()  # TODO: is there a way to put this in mert_input? not a fan of doing this in cpu
             mert_input["input_values"] = mert_input["input_values"].cuda()
@@ -104,7 +104,7 @@ class HubertWithKmeans(nn.Module):
             all_layer_hidden_states = torch.stack(outputs.hidden_states).squeeze() # 1 x 13 layers x timesteps x 768 feature_dim
             print(f"all_layer_hidden_states.shape {all_layer_hidden_states.shape} and device {all_layer_hidden_states.device}")
             embed = all_layer_hidden_states[self.layer] # timesteps x 768 feature_dim
-            packed_shape = embed.shape
+            packed_shape = torch.Size([1, embed.shape[0]]) # extremely hacky way to replicate einops.pack behavior for packed_shape
         else:
             embed = self.model(wav_input, features_only = True)
             # print(f"embed.keys(): {embed.keys()}")
@@ -114,6 +114,7 @@ class HubertWithKmeans(nn.Module):
             # this is the number of tokens-- derived via 16 KHz sampling to 50 Hz tokens -> 320x reduction, so
             # 10240 / 320 = 32 rounds down to 31.
             embed, packed_shape = pack([embed['x']], '* d')
+            # embed is 31 x 768, packed_shape is 1 x 31
         print(f"self.use_mert: {self.use_mert}, wav_input shape: {wav_input.shape}, embed shape: {embed.shape}, packed_shape: {packed_shape}")
 
         codebook_indices = self.kmeans.predict(embed.cpu().detach().numpy())
