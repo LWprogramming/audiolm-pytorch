@@ -15,7 +15,7 @@ from audiolm_pytorch.utils import curtail_to_multiple
 import logging
 logging.root.setLevel(logging.ERROR)
 
-from transformers import HubertModel
+from transformers import HubertModel, Wav2Vec2Processor
 
 def exists(val):
     return val is not None
@@ -48,6 +48,7 @@ class HubertWithKmeans(nn.Module):
             self.model = model[0]
         else:
             self.model = HubertModel.from_pretrained("m-a-p/MERT-v0")
+            self.processor = Wav2Vec2Processor.from_pretrained("facebook/hubert-large-ls960-ft")
             self.layer = 7 # hardcoded to pull out from this layer in MERT. TODO refactor this later
 
         kmeans_path = Path(kmeans_path)
@@ -84,7 +85,13 @@ class HubertWithKmeans(nn.Module):
 
         if self.use_mert:
             # wav_input is batch x samples
-            outputs = self.model(wav_input, output_hidden_states=True)
+            # mert_input is {
+            #   "input_values": processed array of wav_input (it's not copied directly by self.processor),
+            #   "attention_mask": equivalent of torch.ones(mert_input["input_values"].shape)
+            # }
+            sampling_rate = input_sample_hz if exists(input_sample_hz) else self.target_sample_hz
+            mert_input = self.processor(wav_input, sampling_rate=sampling_rate, return_tensors="pt")
+            outputs = self.model(**mert_input, output_hidden_states=True)
             all_layer_hidden_states = torch.stack(outputs.hidden_states).squeeze() # 13 layers x timesteps x 768 feature_dim
             embed = all_layer_hidden_states[self.layer] # timesteps x 768 feature_dim
             packed_shape = embed.shape
