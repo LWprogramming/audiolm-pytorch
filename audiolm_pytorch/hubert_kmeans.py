@@ -87,19 +87,29 @@ class HubertWithKmeans(nn.Module):
 
         if self.use_mert:
             # wav_input is batch x samples
-            # mert_input is {
-            #   "input_values": processed array of wav_input (it's not copied directly by self.processor),
-            #   "attention_mask": equivalent of torch.ones(mert_input["input_values"].shape)
-            # }
-            # "input_values" shape is 1 x wav_input.shape which includes batches. not sure why it prepends a 1
-            sampling_rate = input_sample_hz if exists(input_sample_hz) else self.target_sample_hz
-            mert_input = self.processor(wav_input[0], sampling_rate=sampling_rate, return_tensors="pt") # TODO: is there a problem with batching here? feel like something is wrong here.
-            # print(f"mert_input devices: attn mask {mert_input['attention_mask'].device}, input_values {mert_input['input_values'].device}")
-            mert_input["attention_mask"] = mert_input["attention_mask"].cuda()  # TODO: is there a way to put this in mert_input? not a fan of doing this in cpu
-            mert_input["input_values"] = mert_input["input_values"].cuda()
-            # also what's with the processor going to cpu?
-            print(f"wav_input.is_cuda {wav_input.is_cuda}")
-            print(f"mert shape {mert_input['input_values'].shape} and keys {mert_input.keys()}")
+            # # mert_input is {
+            # #   "input_values": processed array of wav_input (it's not copied directly by self.processor),
+            # #   "attention_mask": equivalent of torch.ones(mert_input["input_values"].shape)
+            # # }
+            # sampling_rate = input_sample_hz if exists(input_sample_hz) else self.target_sample_hz
+            # mert_input = self.processor(wav_input[0], sampling_rate=sampling_rate, return_tensors="pt") # TODO: is there a problem with batching here? feel like something is wrong here.
+            # mert_input["attention_mask"] = mert_input["attention_mask"].cuda()
+            # mert_input["input_values"] = mert_input["input_values"].cuda()
+            # print(f"wav_input.is_cuda {wav_input.is_cuda}")
+            # print(f"mert shape {mert_input['input_values'].shape} and keys {mert_input.keys()}")
+            #
+            # So transformers processor is totally busted and we just want to have zero mean and unit variance.
+            # just normalize, we don't need any of this extra padding stuff
+            # the problem is that the transformers library expects you to do all data processing in CPU and forces you
+            # to use numpy ndarrays for everything. This defeats the point here because wav_input is already in cuda by this point.
+            if wav_input.shape[0] != 1:
+                raise AssertionError(f"This normalization code was written under the assumption that for some reason "
+                                     f"batch size is only ever going to be 1 in the mert case. If you're seeing this, "
+                                     f"that hasn't happened. instead wav_input.shape is {wav_input.shape}")
+            mert_input = {
+                "input_values": (wav_input - wav_input.mean()) / torch.sqrt(wav_input.var() + 1e-7),
+                "attention_mask": torch.ones_like(wav_input)
+            }
             outputs = self.model(**mert_input, output_hidden_states=True) # 1 x everything.
             all_layer_hidden_states = torch.stack(outputs.hidden_states).squeeze() # 1 x 13 layers x timesteps x 768 feature_dim
             print(f"all_layer_hidden_states.shape {all_layer_hidden_states.shape} and device {all_layer_hidden_states.device}")
