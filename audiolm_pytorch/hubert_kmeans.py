@@ -96,7 +96,7 @@ class HubertWithKmeans(nn.Module):
             print(f"mert shape {mert_input['input_values'].shape}")
             mert_input["attention_mask"].cuda() # TODO: is there a way to put this in mert_input? not a fan of doing this in cpu
             mert_input["input_values"].cuda()
-            print(wav_input.is_cuda())
+            print(wav_input.is_cuda)
             outputs = self.model(**mert_input, output_hidden_states=True) # 1 x everything.
             all_layer_hidden_states = torch.stack(outputs.hidden_states).squeeze() # 1 x 13 layers x timesteps x 768 feature_dim
             print(f"all_layer_hidden_states.shape {all_layer_hidden_states.shape}")
