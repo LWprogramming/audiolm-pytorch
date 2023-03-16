@@ -704,7 +704,7 @@ class SoundStream(nn.Module):
         x = rearrange(x, 'b n c -> b c n')
 
         if return_encoded:
-            # 1 is batch size, 8 is rq num quantizers, 32 is result of striding factor
+            # 1 is batch size, 8 is rq num quantizers, 32 is result of striding factor and number of timesteps
             # basically: max_data_length = 320 * 32 == 10240 so x shape is [1, 10240]. then 10240 / ( 2 * 4 * 5 * 8) = 32
             # Unfortunately it doesn't seem so obvious how to precisely observe this effect because modifying striding factor messes with things
             # but I'm pretty confident it's true based on the soundstream paper https://arxiv.org/pdf/2107.03312.pdf page 4 right column second paragraph
