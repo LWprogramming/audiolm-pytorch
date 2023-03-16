@@ -695,6 +695,7 @@ class SoundStream(nn.Module):
             # 1 is batch size, 8 is rq num quantizers, 32 is result of striding factor
             # basically: max_data_length = 320 * 32 == 10240 so x shape is [1, 10240]. then 10240 / ( 2 * 4 * 5 * 8) = 32
             # Unfortunately it doesn't seem so obvious how to precisely observe this effect because modifying striding factor messes with things
+            # but I'm pretty confident it's true based on the soundstream paper https://arxiv.org/pdf/2107.03312.pdf page 4 right column second paragraph
             print(f"soundstream indices shape: {indices.shape}") # 1 x 32 x 8
             return x, indices, commit_loss
 
@@ -831,7 +832,7 @@ class SoundStream(nn.Module):
 # some default soundstreams
 
 def AudioLMSoundStream(
-    strides = (2, 4, 5, 4),
+    strides = (2, 4, 5, 8),
     target_sample_hz = 16000,
     rq_num_quantizers = 12,
     **kwargs
