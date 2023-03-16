@@ -1608,6 +1608,8 @@ class FineTransformerWrapper(nn.Module):
 
         coarse_and_fine_ids = torch.cat((coarse_token_ids, sampled_fine_token_ids), dim = -1)
 
+        # coarse_and_fine_ids.shape torch.Size([1, 512, 8])
+        # probably 8 quantizers, each one is probably ? embed dimension aka transformer arg dim?
         print(f"coarse_and_fine_ids.shape {coarse_and_fine_ids.shape} to be decoded from codebook indices by soundstream")
         wav = self.soundstream.decode_from_codebook_indices(coarse_and_fine_ids)
         return rearrange(wav, 'b 1 n -> b n')
