@@ -29,6 +29,11 @@ parsed_version = version.parse(__version__)
 
 import pickle
 
+from encodec import EncodecModel
+from encodec.utils import convert_audio
+import torchaudio
+
+
 # helper functions
 
 def exists(val):
@@ -389,6 +394,26 @@ class LocalTransformer(nn.Module):
 
         return x
 
+class EncodecWrapper(nn.Module):
+    def __init__(self):
+        # Instantiate a pretrained EnCodec model
+        self.model = EncodecModel.encodec_model_24khz()
+        self.model.set_target_bandwidth(6.0)
+
+    def forward(self, x, x_sampling_rate=16000):
+        # assume x sampling rate is 16kHz by default because these are the rates we're using
+        print("x_sampling_rate should be set manually when actually using this later!!")
+        assert not self.model.training, "Encodec is pretrained and should never be called outside eval mode."
+        # convert_audio up-samples if necessary, e.g. if wav has n samples at 16 kHz and model is 48 kHz,
+        # then resulting wav has 3n samples because you do n * 48/16
+        wav = convert_audio(x, x_sampling_rate, self.model.sample_rate, self.model.channels)
+        wav = wav.unsqueeze(0)
+        # Extract discrete codes from EnCodec
+        with torch.no_grad():
+            encoded_frames = self.model.encode(wav)
+        codes = torch.cat([encoded[0] for encoded in encoded_frames], dim=-1)  # [B, n_q, T]
+        return None, codes, None # in original soundstream, is x, indices, commit_loss. But we only use indices, so not relevant.
+
 class SoundStream(nn.Module):
     def __init__(
         self,
@@ -657,6 +682,7 @@ class SoundStream(nn.Module):
         x = rearrange(x, 'b n c -> b c n')
 
         if return_encoded:
+            print(f"soundstream indices shape: {indices.shape}")
             return x, indices, commit_loss
 
         recon_x = self.decoder(x)

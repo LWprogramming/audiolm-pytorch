@@ -23,6 +23,7 @@ setup(
     'beartype',
     'einops>=0.6',
     'ema-pytorch',
+    'encodec',
     'fairseq',
     'joblib',
     'lion-pytorch',
