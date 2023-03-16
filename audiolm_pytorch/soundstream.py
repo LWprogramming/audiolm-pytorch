@@ -655,12 +655,16 @@ class SoundStream(nn.Module):
         input_sample_hz = None,
         apply_grad_penalty = False
     ):
+        print(f"x start shape {x.shape}")
         x, ps = pack([x], '* n')
+        print(f"x packed {x.shape}")
 
         if exists(input_sample_hz):
             x = resample(x, input_sample_hz, self.target_sample_hz)
+            print(f"x resampled {x.shape}")
 
         x = curtail_to_multiple(x, self.seq_len_multiple_of)
+        print(f"x curtail to multipled {x.shape}")
 
         if x.ndim == 2:
             x = rearrange(x, 'b n -> b 1 n')
@@ -688,7 +692,8 @@ class SoundStream(nn.Module):
         x = rearrange(x, 'b n c -> b c n')
 
         if return_encoded:
-            # hypothesis: 1 is batch size, 32 is num channels of soundstream, 8 is rq num quantizers
+            # hypothesis: 1 is batch size, 8 is rq num quantizers
+            # 32 is num channels of soundstream
             print(f"soundstream indices shape: {indices.shape}") # 1 x 32 x 8
             return x, indices, commit_loss
 
