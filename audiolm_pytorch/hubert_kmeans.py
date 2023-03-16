@@ -77,7 +77,8 @@ class HubertWithKmeans(nn.Module):
         input_sample_hz = None
     ):
         device = wav_input.device
-        print(f"wav input shape before processing: {wav_input.shape} and device: {wav_input.device}")
+        # on cuda, 1 x length defined in semantic/coarse transformer
+        # print(f"wav input shape before processing: {wav_input.shape} and device: {wav_input.device}")
 
         if exists(input_sample_hz):
             wav_input = resample(wav_input, input_sample_hz, self.target_sample_hz)
@@ -112,27 +113,27 @@ class HubertWithKmeans(nn.Module):
             }
             outputs = self.model(**mert_input, output_hidden_states=True) # 1 x everything.
             all_layer_hidden_states = torch.stack(outputs.hidden_states).squeeze() # 1 x 13 layers x timesteps x 768 feature_dim
-            print(f"all_layer_hidden_states.shape {all_layer_hidden_states.shape} and device {all_layer_hidden_states.device}")
+            # print(f"all_layer_hidden_states.shape {all_layer_hidden_states.shape} and device {all_layer_hidden_states.device}") # cuda
             embed = all_layer_hidden_states[self.layer] # timesteps x 768 feature_dim
             packed_shape = [torch.Size([1, embed.shape[0]])] # extremely hacky way to replicate einops.pack behavior for packed_shape
         else:
             embed = self.model(wav_input, features_only = True)
             # print(f"embed.keys(): {embed.keys()}")
             # padding_mask is also a key but it's None
-            print(f"type(wav_input) {type(wav_input)} and shape: {wav_input.shape}") # 1 x 10240 in the example, dependent on max_length or whatever that parameter is
-            print(f"embed['x'] shape: {embed['x'].shape}, embed['features'].shape: {embed['features'].shape}") # 1 x 31 x 768 for both.
+            # print(f"type(wav_input) {type(wav_input)} and shape: {wav_input.shape}") # 1 x 10240 in the example, dependent on max_length or whatever that parameter is
+            # print(f"embed['x'] shape: {embed['x'].shape}, embed['features'].shape: {embed['features'].shape}") # 1 x 31 x 768 for both.
             # this is the number of tokens-- derived via 16 KHz sampling to 50 Hz tokens -> 320x reduction, so
             # 10240 / 320 = 32 rounds down to 31.
             embed, packed_shape = pack([embed['x']], '* d')
         # wav_input shape: torch.Size([1, 10240]), embed shape: torch.Size([31, 768]), packed_shape: [torch.Size([1, 31])]
-        print(f"self.use_mert: {self.use_mert}, wav_input shape: {wav_input.shape}, embed shape: {embed.shape}, packed_shape: {packed_shape}")
+        # print(f"self.use_mert: {self.use_mert}, wav_input shape: {wav_input.shape}, embed shape: {embed.shape}, packed_shape: {packed_shape}")
 
         codebook_indices = self.kmeans.predict(embed.cpu().detach().numpy())
 
         codebook_indices = torch.from_numpy(codebook_indices).to(device).long()
-        print(f"codebook_indices before unpacking: {codebook_indices.shape}")
+        # print(f"codebook_indices before unpacking: {codebook_indices.shape}") # [31]
         if flatten:
             return codebook_indices
         codebook_indices, = unpack(codebook_indices, packed_shape, '*')
-        print(f"codebook_indices after unpacking: {codebook_indices.shape}")
+        # print(f"codebook_indices after unpacking: {codebook_indices.shape}") # [1, 31]
         return codebook_indices
