@@ -1374,6 +1374,7 @@ class CoarseTransformerWrapper(nn.Module):
 
         assert exists(self.soundstream)
 
+        print(f"sampled_coarse_token_ids.shape {sampled_coarse_token_ids.shape} to be decoded from codebook indices by soundstream")
         wav = self.soundstream.decode_from_codebook_indices(sampled_coarse_token_ids)
         return rearrange(wav, 'b 1 n -> b n')
 
@@ -1606,6 +1607,7 @@ class FineTransformerWrapper(nn.Module):
 
         coarse_and_fine_ids = torch.cat((coarse_token_ids, sampled_fine_token_ids), dim = -1)
 
+        print(f"coarse_and_fine_ids.shape {coarse_and_fine_ids.shape} to be decoded from codebook indices by soundstream")
         wav = self.soundstream.decode_from_codebook_indices(coarse_and_fine_ids)
         return rearrange(wav, 'b 1 n -> b n')
 
@@ -1633,6 +1635,7 @@ class FineTransformerWrapper(nn.Module):
 
             with torch.no_grad():
                 self.soundstream.eval()
+                print(f"raw wave provided for fine transformer wrapper. raw_wave.shape {raw_wave.shape} and device {raw_wave.device}")
                 _, token_ids, _ = self.soundstream(raw_wave, return_encoded = True)
 
         if exists(token_ids):
