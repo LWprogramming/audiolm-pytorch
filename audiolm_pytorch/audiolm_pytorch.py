@@ -1374,7 +1374,7 @@ class CoarseTransformerWrapper(nn.Module):
 
         assert exists(self.soundstream)
 
-        print(f"sampled_coarse_token_ids.shape {sampled_coarse_token_ids.shape} to be decoded from codebook indices by soundstream")
+        # print(f"sampled_coarse_token_ids.shape {sampled_coarse_token_ids.shape} to be decoded from codebook indices by soundstream")
         wav = self.soundstream.decode_from_codebook_indices(sampled_coarse_token_ids)
         return rearrange(wav, 'b 1 n -> b n')
 
@@ -1412,7 +1412,8 @@ class CoarseTransformerWrapper(nn.Module):
 
             with torch.no_grad():
                 self.soundstream.eval()
-                print(f"raw_wave_for_soundstream provided for coarse transformer wrapper. raw_wave.shape {raw_wave_for_soundstream.shape} and device {raw_wave_for_soundstream.device}")
+                # still batch x data_max_length e.g. [1 x 10240]
+                # print(f"raw_wave_for_soundstream provided for coarse transformer wrapper. raw_wave.shape {raw_wave_for_soundstream.shape} and device {raw_wave_for_soundstream.device}")
                 _, indices, _ = self.soundstream(raw_wave_for_soundstream, return_encoded = True)
                 coarse_token_ids, _ = indices[..., :self.num_coarse_quantizers], indices[..., self.num_coarse_quantizers:]
 
@@ -1609,8 +1610,10 @@ class FineTransformerWrapper(nn.Module):
         coarse_and_fine_ids = torch.cat((coarse_token_ids, sampled_fine_token_ids), dim = -1)
 
         # coarse_and_fine_ids.shape torch.Size([1, 512, 8])
-        # probably 8 quantizers, each one is probably ? embed dimension aka transformer arg dim?
-        print(f"coarse_and_fine_ids.shape {coarse_and_fine_ids.shape} to be decoded from codebook indices by soundstream")
+        # 1 is batch size, 8 is num_quantizers (confirmed when I ran soundstream with 12 quantizers instead)
+        # 512 is related to max_time_steps which is a result of CoarseTransformerWrapper's thing about stopping in the last quantizer
+        # (see the code in CoarseTransformerWrapper, where max_time_steps is explicitly set as an argument in its generate() method)
+        # print(f"coarse_and_fine_ids.shape {coarse_and_fine_ids.shape} to be decoded from codebook indices by soundstream")
         wav = self.soundstream.decode_from_codebook_indices(coarse_and_fine_ids)
         return rearrange(wav, 'b 1 n -> b n')
 
@@ -1638,7 +1641,8 @@ class FineTransformerWrapper(nn.Module):
 
             with torch.no_grad():
                 self.soundstream.eval()
-                print(f"raw wave provided for fine transformer wrapper. raw_wave.shape {raw_wave.shape} and device {raw_wave.device}")
+                # still batch x data_max_length e.g. [1 x 10240]
+                # print(f"raw wave provided for fine transformer wrapper. raw_wave.shape {raw_wave.shape} and device {raw_wave.device}")
                 _, token_ids, _ = self.soundstream(raw_wave, return_encoded = True)
 
         if exists(token_ids):
