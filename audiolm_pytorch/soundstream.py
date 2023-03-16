@@ -418,7 +418,7 @@ class SoundStream(nn.Module):
     def __init__(
         self,
         *,
-        channels = 64,
+        channels = 32,
         strides = (2, 4, 5, 8),
         channel_mults = (2, 4, 8, 16),
         codebook_dim = 512,
@@ -667,7 +667,9 @@ class SoundStream(nn.Module):
 
         orig_x = x.clone()
 
+        print(f"x.shape pre-encoder {x.shape}")
         x = self.encoder(x)
+        print(f"x.shape post-encoder {x.shape}")
 
         x = rearrange(x, 'b c n -> b n c')
 
