@@ -418,7 +418,7 @@ class SoundStream(nn.Module):
     def __init__(
         self,
         *,
-        channels = 32,
+        channels = 64,
         strides = (2, 4, 5, 8),
         channel_mults = (2, 4, 8, 16),
         codebook_dim = 512,
@@ -673,7 +673,11 @@ class SoundStream(nn.Module):
 
         if exists(self.encoder_attn):
             x = self.encoder_attn(x)
-
+        print(f"x.shape pre-rq, {x.shape}")
+        # self.rq = ResidualVQ(
+        #     dim = codebook_dim,
+        #     num_quantizers = rq_num_quantizers,
+        #     codebook_size = codebook_size,
         x, indices, commit_loss = self.rq(x)
 
         if exists(self.decoder_attn):
@@ -682,7 +686,8 @@ class SoundStream(nn.Module):
         x = rearrange(x, 'b n c -> b c n')
 
         if return_encoded:
-            print(f"soundstream indices shape: {indices.shape}")
+            # hypothesis: 1 is batch size, 32 is num channels of soundstream, 8 is rq num quantizers
+            print(f"soundstream indices shape: {indices.shape}") # 1 x 32 x 8
             return x, indices, commit_loss
 
         recon_x = self.decoder(x)
