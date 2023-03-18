@@ -407,8 +407,9 @@ class LocalTransformer(nn.Module):
 class EncodecWrapper(nn.Module):
     def __init__(self):
         # Instantiate a pretrained EnCodec model
-        self.model = EncodecModel.encodec_model_24khz()
-        self.model.set_target_bandwidth(6.0)
+        self.model = EncodecModel.encodec_model_48khz()
+        # bandwidth affects num quantizers used: https://github.com/facebookresearch/encodec/pull/41
+        self.model.set_target_bandwidth(12.0)
 
     def forward(self, x, x_sampling_rate=16000):
         # assume x sampling rate is 16kHz by default because these are the rates we're using
@@ -416,13 +417,24 @@ class EncodecWrapper(nn.Module):
         assert not self.model.training, "Encodec is pretrained and should never be called outside eval mode."
         # convert_audio up-samples if necessary, e.g. if wav has n samples at 16 kHz and model is 48 kHz,
         # then resulting wav has 3n samples because you do n * 48/16
+        # TODO: how do we bring sampling rate back down from the 48kHz model?
         wav = convert_audio(x, x_sampling_rate, self.model.sample_rate, self.model.channels)
         wav = wav.unsqueeze(0)
         # Extract discrete codes from EnCodec
         with torch.no_grad():
             encoded_frames = self.model.encode(wav)
         codes = torch.cat([encoded[0] for encoded in encoded_frames], dim=-1)  # [B, n_q, T]
+        print(f"encodec codes shape {codes.shape}")
         return None, codes, None # in original soundstream, is x, indices, commit_loss. But we only use indices, so not relevant.
+
+   def decode_from_codebook_indices(self, quantized_indices):
+        pass
+        # codes = self.rq.get_codes_from_indices(quantized_indices)
+        # x = reduce(codes, 'q ... -> ...', 'sum')
+        #
+        # x = self.decoder_attn(x)
+        # x = rearrange(x, 'b n c -> b c n')
+        # return self.decoder(x)
 
 class SoundStream(nn.Module):
     def __init__(
@@ -589,12 +601,17 @@ class SoundStream(nn.Module):
         return pickle.loads(self._configs)
 
     def decode_from_codebook_indices(self, quantized_indices):
+        print(f"quantized indices shape {quantized_indices.shape}")
         codes = self.rq.get_codes_from_indices(quantized_indices)
+        print(f"codes shape {codes.shape}")
         x = reduce(codes, 'q ... -> ...', 'sum')
-
+        print(f"x shape {x.shape}")
         x = self.decoder_attn(x)
+        print(f"x shape after decoder attn {x.shape}")
         x = rearrange(x, 'b n c -> b c n')
-        return self.decoder(x)
+        result = self.decoder(x)
+        print(f"decoder(x) shape {result.shape}")
+        return result
 
     def save(self, path):
         path = Path(path)
