@@ -684,35 +684,31 @@ class SoundStream(nn.Module):
         input_sample_hz = None,
         apply_grad_penalty = False
     ):
-        print(f"x start shape {x.shape}")
+        # print(f"x start shape {x.shape}") # 1 x 10240
         x, ps = pack([x], '* n')
-        print(f"x packed {x.shape}")
+        # print(f"x packed {x.shape}")  # 1 x 10240
 
         if exists(input_sample_hz):
             x = resample(x, input_sample_hz, self.target_sample_hz)
-            print(f"x resampled {x.shape}")
+            # print(f"x resampled {x.shape}")
 
         x = curtail_to_multiple(x, self.seq_len_multiple_of)
-        print(f"x curtail to multipled {x.shape}")
+        # print(f"x curtail to multipled {x.shape}") # 1 x 10240
 
         if x.ndim == 2:
             x = rearrange(x, 'b n -> b 1 n')
 
         orig_x = x.clone()
 
-        print(f"x.shape pre-encoder {x.shape}")
+        # print(f"x.shape pre-encoder {x.shape}")  # 1 x 1 x 10240
         x = self.encoder(x)
-        print(f"x.shape post-encoder {x.shape}")
+        # print(f"x.shape post-encoder {x.shape}") # 1 x 512 x 32  batch x codebook_dim x timesteps
 
         x = rearrange(x, 'b c n -> b n c')
 
         if exists(self.encoder_attn):
             x = self.encoder_attn(x)
-        print(f"x.shape pre-rq, {x.shape}")
-        # self.rq = ResidualVQ(
-        #     dim = codebook_dim,
-        #     num_quantizers = rq_num_quantizers,
-        #     codebook_size = codebook_size,
+        # print(f"x.shape pre-rq, {x.shape}") # 1 x 32 x 512 just rearranged from after encoder
         x, indices, commit_loss = self.rq(x)
 
         if exists(self.decoder_attn):
@@ -725,7 +721,7 @@ class SoundStream(nn.Module):
             # basically: max_data_length = 320 * 32 == 10240 so x shape is [1, 10240]. then 10240 / ( 2 * 4 * 5 * 8) = 32
             # Unfortunately it doesn't seem so obvious how to precisely observe this effect because modifying striding factor messes with things
             # but I'm pretty confident it's true based on the soundstream paper https://arxiv.org/pdf/2107.03312.pdf page 4 right column second paragraph
-            print(f"soundstream indices shape: {indices.shape}") # 1 x 32 x 8
+            # print(f"soundstream indices shape: {indices.shape}") # 1 x 32 x 8
             return x, indices, commit_loss
 
         recon_x = self.decoder(x)
