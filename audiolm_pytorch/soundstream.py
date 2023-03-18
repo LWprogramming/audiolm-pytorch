@@ -427,7 +427,7 @@ class EncodecWrapper(nn.Module):
         print(f"encodec codes shape {codes.shape}")
         return None, codes, None # in original soundstream, is x, indices, commit_loss. But we only use indices, so not relevant.
 
-   def decode_from_codebook_indices(self, quantized_indices):
+    def decode_from_codebook_indices(self, quantized_indices):
         pass
         # codes = self.rq.get_codes_from_indices(quantized_indices)
         # x = reduce(codes, 'q ... -> ...', 'sum')
