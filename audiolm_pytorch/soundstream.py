@@ -601,16 +601,24 @@ class SoundStream(nn.Module):
         return pickle.loads(self._configs)
 
     def decode_from_codebook_indices(self, quantized_indices):
-        print(f"quantized indices shape {quantized_indices.shape}")
+        # quantized indices shape torch.Size([1, 512, 8]) # 512 is num coarse + fine tokens combined
+        # print(f"quantized indices shape {quantized_indices.shape}")
         codes = self.rq.get_codes_from_indices(quantized_indices)
-        print(f"codes shape {codes.shape}")
-        x = reduce(codes, 'q ... -> ...', 'sum')
-        print(f"x shape {x.shape}")
+        # codes shape torch.Size([8, 1, 512, 512]) # codebook vectors are 512-dimensional as well.
+        # n_quantizers x batch x num_timesteps x the actual 512 vector in codebook
+        # print(f"codes shape {codes.shape}")
+        x = reduce(codes, 'q ... -> ...', 'sum') # einops.reduce, add the quantized vectors (the R in RVQ)
+        # x shape torch.Size([1, 512, 512])
+        # print(f"x shape {x.shape}")
         x = self.decoder_attn(x)
-        print(f"x shape after decoder attn {x.shape}")
-        x = rearrange(x, 'b n c -> b c n')
+        # x shape after decoder attn torch.Size([1, 512, 512]). shape unchanged.
+        # print(f"x shape after decoder attn {x.shape}")
+        x = rearrange(x, 'b n c -> b c n') # batch x timesteps x codebook vector size -> batch x codebook dim x timesteps
         result = self.decoder(x)
-        print(f"decoder(x) shape {result.shape}")
+        # decoder(x) shape torch.Size([1, 1, 163840]) # decoder does timesteps x stride product to basically "unwind" things
+        # 512 coarse/fine tokens total, and audiolm stride product defaults to 320
+        # the product is number of timesteps in decoded result
+        # print(f"decoder(x) shape {result.shape}")
         return result
 
     def save(self, path):
