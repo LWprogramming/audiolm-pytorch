@@ -30,7 +30,7 @@ parsed_version = version.parse(__version__)
 import pickle
 
 from encodec import EncodecModel
-from encodec.utils import convert_audio
+from encodec.utils import convert_audio, _linear_overlap_add
 import torchaudio
 
 
@@ -408,6 +408,10 @@ class EncodecWrapper(nn.Module):
     def __init__(self):
         # Instantiate a pretrained EnCodec model
         self.model = EncodecModel.encodec_model_48khz()
+        # I'm going to guess that the codes can be the unscaled versions.
+        # TODO: see if we need to keep the scaled version and somehow persist the scale factors for when we need to decode?
+        self.model.normalize = False # this means we don't need to scale codes e.g. when running model.encode(wav)
+
         # bandwidth affects num quantizers used: https://github.com/facebookresearch/encodec/pull/41
         self.model.set_target_bandwidth(12.0)
 
@@ -428,13 +432,26 @@ class EncodecWrapper(nn.Module):
         return None, codes, None # in original soundstream, is x, indices, commit_loss. But we only use indices, so not relevant.
 
     def decode_from_codebook_indices(self, quantized_indices):
-        pass
         # codes = self.rq.get_codes_from_indices(quantized_indices)
         # x = reduce(codes, 'q ... -> ...', 'sum')
         #
         # x = self.decoder_attn(x)
         # x = rearrange(x, 'b n c -> b c n')
         # return self.decoder(x)
+        frames = [self._decode_frame(frame) for frame in quantized_indices] # TODO: figure out the right shape for here, something wrong here probably
+        return _linear_overlap_add(frames, self.model.segment_stride or 1)
+
+    def _decode_frame(self, quantized_indices):
+        # hacked in from self.model._decode_frame() where we skip the part about scales and assume we've already
+        # unwrapped the EncodedFrame
+        # quantized indices shape batch x (num coarse + fine tokens combined) x num_quantizers = 1 x 512 x 8
+        codes = quantized_indices.transpose(0, 1)
+        emb = self.model.quantizer.decode(codes)
+        out = self.model.decoder(emb)
+        # see __init__ for assumption that scale is not used here.
+        # if scale is not None:
+        #     out = out * scale.view(-1, 1, 1)
+        return out
 
 class SoundStream(nn.Module):
     def __init__(
