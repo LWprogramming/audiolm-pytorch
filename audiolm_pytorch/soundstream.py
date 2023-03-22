@@ -441,7 +441,9 @@ class EncodecWrapper(nn.Module):
         # x = self.decoder_attn(x)
         # x = rearrange(x, 'b n c -> b c n')
         # return self.decoder(x)
+        print(f"quantized_indices shape in decoding: {quantized_indices.shape}")
         frames = [self._decode_frame(frame) for frame in quantized_indices] # TODO: figure out the right shape for here, something wrong here probably
+        print(f"len(frames) {len(frames)} and first decoded frame shape: {frames[0].shape}}")
         return _linear_overlap_add(frames, self.model.segment_stride or 1)
 
     def _decode_frame(self, quantized_indices):
