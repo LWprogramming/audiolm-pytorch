@@ -633,7 +633,7 @@ class SoundStream(nn.Module):
         # print(f"codes shape {codes.shape}")
         x = reduce(codes, 'q ... -> ...', 'sum') # einops.reduce, add the quantized vectors (the R in RVQ)
         # x shape torch.Size([1, 512, 512])
-        # print(f"x shape {x.shape}")
+        print(f"x shape {x.shape}")
         x = self.decoder_attn(x)
         # x shape after decoder attn torch.Size([1, 512, 512]). shape unchanged.
         # print(f"x shape after decoder attn {x.shape}")
@@ -642,7 +642,7 @@ class SoundStream(nn.Module):
         # decoder(x) shape torch.Size([1, 1, 163840]) # decoder does timesteps x stride product to basically "unwind" things
         # 512 coarse/fine tokens total, and audiolm stride product defaults to 320
         # the product is number of timesteps in decoded result
-        # print(f"decoder(x) shape {result.shape}")
+        print(f"decoder(x) shape {result.shape}")
         return result
 
     def save(self, path):

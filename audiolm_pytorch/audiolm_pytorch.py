@@ -1673,7 +1673,7 @@ class FineTransformerWrapper(nn.Module):
             with torch.no_grad():
                 self.soundstream.eval()
                 # still batch x data_max_length e.g. [1 x 10240]
-                # print(f"raw wave provided for fine transformer wrapper. raw_wave.shape {raw_wave.shape} and device {raw_wave.device}")
+                print(f"raw wave provided for fine transformer wrapper. raw_wave.shape {raw_wave.shape} and device {raw_wave.device}")
                 _, token_ids, _ = self.soundstream(raw_wave, return_encoded = True)
 
         if exists(token_ids):
