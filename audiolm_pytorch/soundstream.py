@@ -407,21 +407,24 @@ class LocalTransformer(nn.Module):
 class EncodecWrapper(nn.Module):
     def __init__(self):
         # Instantiate a pretrained EnCodec model
-        self.model = EncodecModel.encodec_model_48khz()
+        # We could try the 48kHz model, but 24kHz matches what was used in MusicLM and avoids any resampling issues
+        # Ideally with more time we figure out how to use 48kHz because that's specifically music, but until then we'll
+        # stick with 24kHz.
+        self.model = EncodecModel.encodec_model_24khz()
         # I'm going to guess that the codes can be the unscaled versions.
         # TODO: see if we need to keep the scaled version and somehow persist the scale factors for when we need to decode?
         self.model.normalize = False # this means we don't need to scale codes e.g. when running model.encode(wav)
 
         # bandwidth affects num quantizers used: https://github.com/facebookresearch/encodec/pull/41
-        self.model.set_target_bandwidth(12.0)
+        self.model.set_target_bandwidth(6.0)
 
-    def forward(self, x, x_sampling_rate=16000):
-        # assume x sampling rate is 16kHz by default because these are the rates we're using
+    def forward(self, x, x_sampling_rate=24000):
         print("x_sampling_rate should be set manually when actually using this later!!")
         assert not self.model.training, "Encodec is pretrained and should never be called outside eval mode."
         # convert_audio up-samples if necessary, e.g. if wav has n samples at 16 kHz and model is 48 kHz,
         # then resulting wav has 3n samples because you do n * 48/16
-        # TODO: how do we bring sampling rate back down from the 48kHz model?
+        # Note: this is a bit of a hack but we avoid any resampling issues here if we just try 24kHz throughout
+        # which makes convert_audio a no-op
         wav = convert_audio(x, x_sampling_rate, self.model.sample_rate, self.model.channels)
         wav = wav.unsqueeze(0)
         # Extract discrete codes from EnCodec
