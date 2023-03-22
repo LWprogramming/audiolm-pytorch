@@ -748,7 +748,7 @@ class CoarseTransformer(nn.Module):
         tokens = self.transformer(tokens, context = text_embeds, self_attn_mask = self_attn_mask, context_mask = text_mask)
 
         # how does this separation work so cleanly? is it just the eos token? but it doesn't hit 100% of the time right??
-        # maybe it's because of self_attn_mask TODO look at that next
+        # maybe it's because of self_attn_mask
         # print(f"checking what's that unknown token in the middle: {tokens[:, semantic_seq_len]}")
         pred_semantic_tokens, pred_coarse_tokens = tokens[:, :semantic_seq_len], tokens[:, (semantic_seq_len + 1):]
 
