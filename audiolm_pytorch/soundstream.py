@@ -435,7 +435,6 @@ class EncodecWrapper(nn.Module):
 
     def forward(self, x, x_sampling_rate=24000, **kwargs):
         # kwargs for stuff like return_encoded=True, which Soundstream uses but Encodec doesn't
-        print("x_sampling_rate should be set manually when actually using this later!!")
         assert not self.model.training, "Encodec is pretrained and should never be called outside eval mode."
         # convert_audio up-samples if necessary, e.g. if wav has n samples at 16 kHz and model is 48 kHz,
         # then resulting wav has 3n samples because you do n * 48/16
@@ -447,7 +446,8 @@ class EncodecWrapper(nn.Module):
         with torch.no_grad():
             encoded_frames = self.model.encode(wav)
         codes = torch.cat([encoded[0] for encoded in encoded_frames], dim=-1)  # [B, n_q, T]
-        print(f"encodec codes shape {codes.shape}")
+        print(f"encodec codes shape {codes.shape}") # [1, 8, 32]
+        # correct, time is 320 * 32 and stride product is 320 so quotient is 32
         return None, codes, None # in original soundstream, is x, indices, commit_loss. But we only use indices, so not relevant.
 
     def decode_from_codebook_indices(self, quantized_indices):
@@ -457,7 +457,8 @@ class EncodecWrapper(nn.Module):
         # x = self.decoder_attn(x)
         # x = rearrange(x, 'b n c -> b c n')
         # return self.decoder(x)
-        print(f"quantized_indices shape in decoding: {quantized_indices.shape}")
+        print(f"quantized_indices shape in decoding: {quantized_indices.shape}") # 1 x 512 x 8
+        #
         frames = [self._decode_frame(frame) for frame in quantized_indices] # TODO: figure out the right shape for here, something wrong here probably
         print(f"len(frames) {len(frames)} and first decoded frame shape: {frames[0].shape}")
         result = _linear_overlap_add(frames, self.model.segment_stride or 1)
@@ -469,8 +470,11 @@ class EncodecWrapper(nn.Module):
         # unwrapped the EncodedFrame
         # quantized indices shape batch x (num coarse + fine tokens combined) x num_quantizers = 1 x 512 x 8
         codes = quantized_indices.transpose(0, 1)
+        print(f"codes.shape in decode_frame {codes.shape}")
         emb = self.model.quantizer.decode(codes)
+        print(f"emb.shape in decode_frame {emb.shape}")
         out = self.model.decoder(emb)
+        print(f"out.shape in decode_frame {out.shape}")
         # see __init__ for assumption that scale is not used here.
         # if scale is not None:
         #     out = out * scale.view(-1, 1, 1)
