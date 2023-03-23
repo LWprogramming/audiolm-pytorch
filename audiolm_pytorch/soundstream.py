@@ -457,18 +457,29 @@ class EncodecWrapper(nn.Module):
         # x = self.decoder_attn(x)
         # x = rearrange(x, 'b n c -> b c n')
         # return self.decoder(x)
-        print(f"quantized_indices shape in decoding: {quantized_indices.shape}") # 1 x 512 x 8
-        #
-        frames = [self._decode_frame(frame) for frame in quantized_indices] # TODO: figure out the right shape for here, something wrong here probably
+        # 1 x 512 x 8 == batch x num tokens x num quantizers
+        print(f"quantized_indices shape in decoding: {quantized_indices.shape}")
+
+        assert self.model.sample_rate == 24000,\
+            "if changing to 48kHz, that model segments its audio into lengths of 1.0 second with 1% overlap, whereas " \
+            "the 24kHz doesn't segment at all. this means the frame decode logic might change; this is a reminder to " \
+            "double check that."
+        # Since we're not doing any segmenting, we have all the frames already (1 frame = 1 token in quantized_indices)
+        # The following code is hacked in from self.model._decode_frame() where we skip the part about scales and assume we've already
+        # unwrapped the EncodedFrame
+        frames = self._decode_frame(quantized_indices)
         print(f"len(frames) {len(frames)} and first decoded frame shape: {frames[0].shape}")
         result = _linear_overlap_add(frames, self.model.segment_stride or 1)
         print(f"result shape {result.shape}")
         return result
 
     def _decode_frame(self, quantized_indices):
-        # hacked in from self.model._decode_frame() where we skip the part about scales and assume we've already
-        # unwrapped the EncodedFrame
-        # quantized indices shape batch x (num coarse + fine tokens combined) x num_quantizers = 1 x 512 x 8
+        # This function is pretty much copy pasted from self.model._decode_frame(), just skipping the EncodedFrame unwrapping and scale stuff.
+        # quantized_indices shape batch x (num coarse + fine tokens combined) x num_quantizers = 1 x 512 x 8
+        # output is of shape batch x num_channels x new_num_samples, where new_num_samples is num_frames * stride product
+        # num_frames, of course, is 512 == the number of tokens you have. one token per frame
+        # stride product is 320, which is the product of the strides in the model, so we predict out length should be
+        # 512 * 320 == 163840
         codes = quantized_indices.transpose(0, 1)
         print(f"codes.shape in decode_frame {codes.shape}")
         emb = self.model.quantizer.decode(codes)
