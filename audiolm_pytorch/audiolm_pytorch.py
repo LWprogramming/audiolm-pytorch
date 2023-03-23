@@ -20,7 +20,7 @@ from audiolm_pytorch.t5 import t5_encode_text, get_encoded_dim, DEFAULT_T5_NAME
 
 from torchaudio.functional import resample
 
-from audiolm_pytorch.soundstream import SoundStream
+from audiolm_pytorch.soundstream import SoundStream, EncodecWrapper
 from audiolm_pytorch.utils import AudioConditionerBase
 
 from tqdm import tqdm
@@ -1302,7 +1302,7 @@ class CoarseTransformerWrapper(nn.Module):
         self,
         *,
         transformer: CoarseTransformer,
-        soundstream: Optional[SoundStream]  = None,
+        soundstream: Optional[SoundStream, EncodecWrapper] = None,
         wav2vec: Optional[Union[FairseqVQWav2Vec, HubertWithKmeans]] = None,
         audio_conditioner: Optional[AudioConditionerBase] = None,
         pad_id = -1,
@@ -1522,7 +1522,7 @@ class FineTransformerWrapper(nn.Module):
         self,
         *,
         transformer: FineTransformer,
-        soundstream: Optional[SoundStream] = None,
+        soundstream: Optional[SoundStream, EncodecWrapper] = None,
         audio_conditioner: Optional[AudioConditionerBase] = None,
         coarse_cross_entropy_loss_weight = 1.,
         pad_id = -1,
@@ -1751,7 +1751,7 @@ class AudioLM(nn.Module):
         self,
         *,
         wav2vec: Optional[Union[FairseqVQWav2Vec, HubertWithKmeans]],
-        soundstream: SoundStream,
+        soundstream: Union[SoundStream, EncodecWrapper],
         semantic_transformer: SemanticTransformer,
         coarse_transformer: CoarseTransformer,
         fine_transformer: FineTransformer,
