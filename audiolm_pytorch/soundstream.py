@@ -471,6 +471,7 @@ class EncodecWrapper(nn.Module):
         frames = self._decode_frame(quantized_indices)
         print(f"len(frames) {len(frames)} and first decoded frame shape: {frames[0].shape}")
         result = _linear_overlap_add(frames, self.model.segment_stride or 1)
+        result = rearrange(result, 'b n -> b 1 n') # TODO: i'm not overly pleased with this because when this function gets called, we just rearrange the result back to b n anyways, but we'll keep this as a temporary hack just to make things work for now
         print(f"result shape {result.shape}")
         return result
 
