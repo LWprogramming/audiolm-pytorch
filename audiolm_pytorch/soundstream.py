@@ -459,7 +459,7 @@ class EncodecWrapper(nn.Module):
         # x = rearrange(x, 'b n c -> b c n')
         # return self.decoder(x)
         # 1 x 512 x 8 == batch x num tokens x num quantizers
-        print(f"quantized_indices shape in decoding: {quantized_indices.shape}")
+        # print(f"quantized_indices shape in decoding: {quantized_indices.shape}")
 
         assert self.model.sample_rate == 24000,\
             "if changing to 48kHz, that model segments its audio into lengths of 1.0 second with 1% overlap, whereas " \
@@ -469,10 +469,11 @@ class EncodecWrapper(nn.Module):
         # The following code is hacked in from self.model._decode_frame() where we skip the part about scales and assume we've already
         # unwrapped the EncodedFrame
         frames = self._decode_frame(quantized_indices)
-        print(f"len(frames) {len(frames)} and first decoded frame shape: {frames[0].shape}")
+        # 1 frame because no segmenting, 1 x (num_frames * stride product)
+        # print(f"len(frames) {len(frames)} and first decoded frame shape: {frames[0].shape}")
         result = _linear_overlap_add(frames, self.model.segment_stride or 1)
         result = rearrange(result, 'b n -> b 1 n') # TODO: i'm not overly pleased with this because when this function gets called, we just rearrange the result back to b n anyways, but we'll keep this as a temporary hack just to make things work for now
-        print(f"result shape {result.shape}")
+        # print(f"result shape {result.shape}") # batch x 1 x 163840
         return result
 
     def _decode_frame(self, quantized_indices):
@@ -482,12 +483,12 @@ class EncodecWrapper(nn.Module):
         # num_frames, of course, is 512 == the number of tokens you have. one token per frame
         # stride product is 320, which is the product of the strides in the model, so we predict out length should be
         # 512 * 320 == 163840
-        codes = rearrange(quantized_indices, 'b t q -> q b t') # expected format
-        print(f"codes.shape in decode_frame {codes.shape}")
+        codes = rearrange(quantized_indices, 'b t q -> q b t') # expected format for decoder
+        # print(f"codes.shape in decode_frame {codes.shape}") # n_q x batch x T
         emb = self.model.quantizer.decode(codes)
-        print(f"emb.shape in decode_frame {emb.shape}")
+        # print(f"emb.shape in decode_frame {emb.shape}") # batch x embed_dimension x T (you can confirm the middle with self.model.quantizer.dimension
         out = self.model.decoder(emb)
-        print(f"out.shape in decode_frame {out.shape}")
+        # print(f"out.shape in decode_frame {out.shape}") # batch x T
         # see __init__ for assumption that scale is not used here.
         # if scale is not None:
         #     out = out * scale.view(-1, 1, 1)
