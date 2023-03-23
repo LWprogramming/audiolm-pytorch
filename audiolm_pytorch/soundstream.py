@@ -405,19 +405,33 @@ class LocalTransformer(nn.Module):
         return x
 
 class EncodecWrapper(nn.Module):
-    def __init__(self):
+    def __init__(self,
+                 target_sample_hz=24000,
+                 strides=(2,4,5,8),
+                 num_quantizers=8,
+                 ):
         super().__init__()
         # Instantiate a pretrained EnCodec model
         # We could try the 48kHz model, but 24kHz matches what was used in MusicLM and avoids any resampling issues
         # Ideally with more time we figure out how to use 48kHz because that's specifically music, but until then we'll
         # stick with 24kHz.
+        self.target_sample_hz = target_sample_hz
+        assert self.target_sample_hz == 24000, "haven't done anything with non-24kHz yet"
         self.model = EncodecModel.encodec_model_24khz()
+
         # I'm going to guess that the codes can be the unscaled versions.
         # TODO: see if we need to keep the scaled version and somehow persist the scale factors for when we need to decode?
         self.model.normalize = False # this means we don't need to scale codes e.g. when running model.encode(wav)
 
         # bandwidth affects num quantizers used: https://github.com/facebookresearch/encodec/pull/41
         self.model.set_target_bandwidth(6.0)
+        assert num_quantizers == 8, "assuming 8 quantizers for now, see bandwidth comment above"
+        self.num_quantizers = num_quantizers
+        self.strides = strides # used in seq_len_multiple_of
+
+    @property
+    def seq_len_multiple_of(self):
+        return functools.reduce(lambda x, y: x * y, self.strides)
 
     def forward(self, x, x_sampling_rate=24000):
         print("x_sampling_rate should be set manually when actually using this later!!")
