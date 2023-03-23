@@ -446,8 +446,9 @@ class EncodecWrapper(nn.Module):
         with torch.no_grad():
             encoded_frames = self.model.encode(wav)
         codes = torch.cat([encoded[0] for encoded in encoded_frames], dim=-1)  # [B, n_q, T]
-        print(f"encodec codes shape {codes.shape}") # [1, 8, 32]
+        # print(f"encodec codes shape {codes.shape}") # [1, 8, 32]
         # correct, time is 320 * 32 and stride product is 320 so quotient is 32
+        # and we set it up so num quantizers is 8
         return None, codes, None # in original soundstream, is x, indices, commit_loss. But we only use indices, so not relevant.
 
     def decode_from_codebook_indices(self, quantized_indices):
@@ -480,7 +481,7 @@ class EncodecWrapper(nn.Module):
         # num_frames, of course, is 512 == the number of tokens you have. one token per frame
         # stride product is 320, which is the product of the strides in the model, so we predict out length should be
         # 512 * 320 == 163840
-        codes = quantized_indices.transpose(0, 1)
+        codes = rearrange(quantized_indices, 'b t q -> q b t') # expected format
         print(f"codes.shape in decode_frame {codes.shape}")
         emb = self.model.quantizer.decode(codes)
         print(f"emb.shape in decode_frame {emb.shape}")
