@@ -433,7 +433,8 @@ class EncodecWrapper(nn.Module):
     def seq_len_multiple_of(self):
         return functools.reduce(lambda x, y: x * y, self.strides)
 
-    def forward(self, x, x_sampling_rate=24000):
+    def forward(self, x, x_sampling_rate=24000, **kwargs):
+        # kwargs for stuff like return_encoded=True, which Soundstream uses but Encodec doesn't
         print("x_sampling_rate should be set manually when actually using this later!!")
         assert not self.model.training, "Encodec is pretrained and should never be called outside eval mode."
         # convert_audio up-samples if necessary, e.g. if wav has n samples at 16 kHz and model is 48 kHz,
