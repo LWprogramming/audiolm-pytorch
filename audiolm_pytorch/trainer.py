@@ -22,7 +22,7 @@ from audiolm_pytorch.optimizer import get_optimizer
 
 from ema_pytorch import EMA
 
-from audiolm_pytorch.soundstream import SoundStream
+from audiolm_pytorch.soundstream import SoundStream, EncodecWrapper
 
 from audiolm_pytorch.audiolm_pytorch import (
     SemanticTransformer,
@@ -115,7 +115,7 @@ def determine_types(data, config):
 class SoundStreamTrainer(nn.Module):
     def __init__(
         self,
-        soundstream: SoundStream,
+        soundstream: Union[SoundStream, EncodecWrapper],
         *,
         num_train_steps,
         batch_size,
@@ -735,7 +735,7 @@ class CoarseTransformerTrainer(nn.Module):
     def __init__(
         self,
         transformer: CoarseTransformer,
-        soundstream: SoundStream,
+        soundstream: Union[SoundStream, EncodecWrapper],
         wav2vec: Optional[Union[FairseqVQWav2Vec, HubertWithKmeans]],
         *,
         num_train_steps,
@@ -985,7 +985,7 @@ class FineTransformerTrainer(nn.Module):
     def __init__(
         self,
         transformer: FineTransformer,
-        soundstream: SoundStream,
+        soundstream: Union[SoundStream, EncodecWrapper],
         *,
         num_train_steps,
         batch_size,
