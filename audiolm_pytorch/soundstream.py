@@ -406,6 +406,7 @@ class LocalTransformer(nn.Module):
 
 class EncodecWrapper(nn.Module):
     def __init__(self):
+        super().__init__()
         # Instantiate a pretrained EnCodec model
         # We could try the 48kHz model, but 24kHz matches what was used in MusicLM and avoids any resampling issues
         # Ideally with more time we figure out how to use 48kHz because that's specifically music, but until then we'll
