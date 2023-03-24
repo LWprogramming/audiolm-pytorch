@@ -20,6 +20,9 @@ from transformers import HubertModel, Wav2Vec2Processor
 def exists(val):
     return val is not None
 
+def default(val, d):
+    return val if exists(val) else d
+
 class HubertWithKmeans(nn.Module):
     """
     checkpoint and kmeans can be downloaded at https://github.com/facebookresearch/fairseq/tree/main/examples/hubert
@@ -32,7 +35,8 @@ class HubertWithKmeans(nn.Module):
         kmeans_path,
         target_sample_hz = 16000,
         seq_len_multiple_of = None,
-        use_mert = False,
+        output_layer = 9,
+        use_mert=False,
     ):
         super().__init__()
         self.target_sample_hz = target_sample_hz
@@ -51,7 +55,7 @@ class HubertWithKmeans(nn.Module):
             # print(f"model is nn module? {isinstance(self.model, nn.Module)}")
             self.processor = Wav2Vec2Processor.from_pretrained("facebook/hubert-large-ls960-ft") # is not nn.Module
             # print(f"processor is nn module? {isinstance(self.processor, nn.Module)}")
-            self.layer = 7 # hardcoded to pull out from this layer in MERT. TODO refactor this later
+            self.layer = output_layer
 
         kmeans_path = Path(kmeans_path)
         assert kmeans_path.exists(), f'path {kmeans_path} does not exist'
@@ -117,7 +121,7 @@ class HubertWithKmeans(nn.Module):
             embed = all_layer_hidden_states[self.layer] # timesteps x 768 feature_dim
             packed_shape = [torch.Size([1, embed.shape[0]])] # extremely hacky way to replicate einops.pack behavior for packed_shape
         else:
-            embed = self.model(wav_input, features_only = True)
+            embed = self.model(wav_input, features_only = True, output_layer = self.output_layer)
             # print(f"embed.keys(): {embed.keys()}")
             # padding_mask is also a key but it's None
             # print(f"type(wav_input) {type(wav_input)} and shape: {wav_input.shape}") # 1 x 10240 in the example, dependent on max_length or whatever that parameter is

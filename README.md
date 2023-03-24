@@ -8,7 +8,7 @@ It also extends the work for conditioning with classifier free guidance with T5.
 
 Please join <a href="https://discord.gg/xBPBXfcFHd"><img alt="Join us on Discord" src="https://img.shields.io/discord/823813159592001537?color=5865F2&logo=discord&logoColor=white"></a> if you are interested in replicating this work in the open
 
-This repository now also contains a MIT licensed version of <a href="https://arxiv.org/abs/2107.03312">SoundStream</a>. Once <a href="https://github.com/facebookresearch/encodec">EnCodec</a> becomes MIT licensed, then I will consider adding a wrapper for that as well for use here.
+This repository now also contains a MIT licensed version of <a href="https://arxiv.org/abs/2107.03312">SoundStream</a>. It is also compatible with <a href="https://github.com/facebookresearch/encodec">EnCodec</a>, however, be aware that it has a more restrictive non-commercial license, if you choose to use it.
 
 Update: AudioLM was essentially used to 'solve' music generation in the new <a href="https://github.com/lucidrains/musiclm-pytorch">MusicLM</a>
 
@@ -34,6 +34,8 @@ In the future, <a href="https://www.youtube.com/watch?v=olNvmUCmY8o">this movie 
 
 - <a href="https://github.com/alexdemartos">Alejandro</a> and <a href="https://github.com/ilya16">Ilya</a> for sharing their results with training soundstream, and for working through a few issues with the local attention positional embeddings
 
+- <a href="https://github.com/LWprogramming">LWprogramming</a> for adding Encodec compatibility!
+
 ## Install
 
 ```bash
@@ -42,9 +44,16 @@ $ pip install audiolm-pytorch
 
 ## Usage
 
-### SoundStream
+### SoundStream & Encodec
 
-First, `SoundStream` needs to be trained on a large corpus of audio data
+There are two options for the neural codec. If you want to use the pretrained 24kHz Encodec, just create an Encodec object as follows:
+```python
+from audiolm_pytorch import EncodecWrapper
+encodec = EncodecWrapper()
+# Now you can use the encodec variable in the same way you'd use the soundstream variables below.
+```
+
+Otherwise, to stay more true to the original paper, you can use `SoundStream`. First, `SoundStream` needs to be trained on a large corpus of audio data
 
 ```python
 from audiolm_pytorch import SoundStream, SoundStreamTrainer
@@ -152,7 +161,7 @@ coarse_transformer = CoarseTransformer(
 
 trainer = CoarseTransformerTrainer(
     transformer = coarse_transformer,
-    soundstream = soundstream,
+    codec = soundstream,
     wav2vec = wav2vec,
     folder = '/path/to/audio/files',
     batch_size = 1,
@@ -181,7 +190,7 @@ fine_transformer = FineTransformer(
 
 trainer = FineTransformerTrainer(
     transformer = fine_transformer,
-    soundstream = soundstream,
+    codec = soundstream,
     folder = '/path/to/audio/files',
     batch_size = 1,
     data_max_length = 320 * 32,
@@ -198,7 +207,7 @@ from audiolm_pytorch import AudioLM
 
 audiolm = AudioLM(
     wav2vec = wav2vec,
-    soundstream = soundstream,
+    codec = soundstream,
     semantic_transformer = semantic_transformer,
     coarse_transformer = coarse_transformer,
     fine_transformer = fine_transformer
