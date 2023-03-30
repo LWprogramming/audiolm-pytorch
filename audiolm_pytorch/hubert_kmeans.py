@@ -41,6 +41,7 @@ class HubertWithKmeans(nn.Module):
         super().__init__()
         self.target_sample_hz = target_sample_hz
         self.seq_len_multiple_of = seq_len_multiple_of
+        self.output_layer = output_layer
 
         self.use_mert = use_mert
         if not use_mert:
