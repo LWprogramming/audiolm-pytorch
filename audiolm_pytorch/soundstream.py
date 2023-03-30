@@ -751,6 +751,7 @@ class SoundStream(nn.Module):
         apply_grad_penalty = False
     ):
         # print(f"x start shape {x.shape}") # 1 x 10240
+        # n == num timesteps
         x, ps = pack([x], '* n')
         # print(f"x packed {x.shape}")  # 1 x 10240
 
@@ -776,6 +777,12 @@ class SoundStream(nn.Module):
             x = self.encoder_attn(x)
         # print(f"x.shape pre-rq, {x.shape}") # 1 x 32 x 512 just rearranged from after encoder
         x, indices, commit_loss = self.rq(x)
+        # 1 is batch size, 8 is rq num quantizers, 32 is number of frames (result of striding factor and number of timesteps)
+        # basically: max_data_length = 320 * 32 == 10240 so original x shape is [1, 10240]. then 10240 / ( 2 * 4 * 5 * 8) = 32
+        # Unfortunately it doesn't seem so obvious how to precisely observe this effect because modifying striding factor messes with things
+        # but I'm pretty confident it's true based on the soundstream paper https://arxiv.org/pdf/2107.03312.pdf page 4 right column second paragraph
+        # print(f"soundstream indices shape: {indices.shape}") # 1 x 32 x 8
+        # Each of the 32 frames is a vector of 8 integers, each integer is an index into the 512 codebook vectors
 
         if exists(self.decoder_attn):
             x = self.decoder_attn(x)
@@ -783,11 +790,7 @@ class SoundStream(nn.Module):
         x = rearrange(x, 'b n c -> b c n')
 
         if return_encoded:
-            # 1 is batch size, 8 is rq num quantizers, 32 is result of striding factor and number of timesteps
-            # basically: max_data_length = 320 * 32 == 10240 so x shape is [1, 10240]. then 10240 / ( 2 * 4 * 5 * 8) = 32
-            # Unfortunately it doesn't seem so obvious how to precisely observe this effect because modifying striding factor messes with things
-            # but I'm pretty confident it's true based on the soundstream paper https://arxiv.org/pdf/2107.03312.pdf page 4 right column second paragraph
-            # print(f"soundstream indices shape: {indices.shape}") # 1 x 32 x 8
+
             return x, indices, commit_loss
 
         recon_x = self.decoder(x)
