@@ -1447,6 +1447,11 @@ class CoarseTransformerWrapper(nn.Module):
                 # still batch x data_max_length e.g. [1 x 10240]
                 # print(f"raw_wave_for_codec provided for coarse transformer wrapper. raw_wave.shape {raw_wave_for_codec.shape} and device {raw_wave_for_codec.device}")
                 _, indices, _ = self.codec(raw_wave_for_codec, return_encoded = True)
+                batch = raw_wave.shape[0]
+                num_timesteps = raw_wave.shape[1]
+                num_frames = int(num_timesteps / self.codec.seq_len_multiple_of)
+                assert indices.shape[0] == batch and indices.shape[1] == num_frames, \
+                    f'Expected indices to have shape (batch, num_frames, num_coarse_quantizers + num_fine_quantizers), but got {indices.shape}'
                 coarse_token_ids, _ = indices[..., :self.num_coarse_quantizers], indices[..., self.num_coarse_quantizers:]
 
         semantic_token_ids = rearrange(semantic_token_ids, 'b ... -> b (...)')
@@ -1676,6 +1681,11 @@ class FineTransformerWrapper(nn.Module):
                 # still batch x data_max_length e.g. [1 x 10240]
                 # print(f"raw wave provided for fine transformer wrapper. raw_wave.shape {raw_wave.shape} and device {raw_wave.device}")
                 _, token_ids, _ = self.codec(raw_wave, return_encoded = True)
+                batch = raw_wave.shape[0]
+                num_timesteps = raw_wave.shape[1]
+                num_frames = int(num_timesteps / self.codec.seq_len_multiple_of)
+                assert token_ids.shape == torch.Size((batch, num_frames, self.num_coarse_quantizers + self.num_fine_quantizers)), \
+                    f'Expected token ids to have shape (batch, num_frames, num_coarse_quantizers + num_fine_quantizers), but got {token_ids.shape}'
 
         if exists(token_ids):
             coarse_token_ids, fine_token_ids = token_ids[..., :self.num_coarse_quantizers], token_ids[..., self.num_coarse_quantizers:]
