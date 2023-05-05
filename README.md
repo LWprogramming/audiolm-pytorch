@@ -8,7 +8,7 @@ It also extends the work for conditioning with classifier free guidance with T5.
 
 Please join <a href="https://discord.gg/xBPBXfcFHd"><img alt="Join us on Discord" src="https://img.shields.io/discord/823813159592001537?color=5865F2&logo=discord&logoColor=white"></a> if you are interested in replicating this work in the open
 
-This repository now also contains a MIT licensed version of <a href="https://arxiv.org/abs/2107.03312">SoundStream</a>. It is also compatible with <a href="https://github.com/facebookresearch/encodec">EnCodec</a>, however, be aware that it has a more restrictive non-commercial license, if you choose to use it.
+This repository now also contains a MIT licensed version of <a href="https://arxiv.org/abs/2107.03312">SoundStream</a>. It is also compatible with <a href="https://github.com/facebookresearch/encodec">EnCodec</a>, which is also [MIT-licensed](https://github.com/facebookresearch/encodec/commit/349b72939f57cb3bc7b60906c0ee8228c849485d) at the time of writing.
 
 Update: AudioLM was essentially used to 'solve' music generation in the new <a href="https://github.com/lucidrains/musiclm-pytorch">MusicLM</a>
 
@@ -35,6 +35,8 @@ In the future, <a href="https://www.youtube.com/watch?v=olNvmUCmY8o">this movie 
 - <a href="https://github.com/alexdemartos">Alejandro</a> and <a href="https://github.com/ilya16">Ilya</a> for sharing their results with training soundstream, and for working through a few issues with the local attention positional embeddings
 
 - <a href="https://github.com/LWprogramming">LWprogramming</a> for adding Encodec compatibility!
+
+- <a href="https://github.com/YoungloLee">@YoungloLee</a> for identifying a big bug in the 1d causal convolution for soundstream related to padding not accounting for strides!
 
 ## Install
 

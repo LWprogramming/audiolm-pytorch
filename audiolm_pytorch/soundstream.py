@@ -4,6 +4,7 @@ from pathlib import Path
 
 from functools import partial, wraps
 from itertools import zip_longest
+from typing import Optional
 
 import torch
 from torch import nn, einsum
@@ -205,8 +206,11 @@ def ComplexSTFTResidualUnit(chan_in, chan_out, strides):
     paddings = tuple(map(lambda t: t // 2, kernel_sizes))
 
     return nn.Sequential(
-        ComplexConv2d(chan_in, chan_in, 3, padding = 1),
-        ModReLU(),
+        Residual(Sequential(
+            ComplexConv2d(chan_in, chan_in, 3, padding = 1),
+            ModReLU(),
+            ComplexConv2d(chan_in, chan_in, 3, padding = 1)
+        )),
         ComplexConv2d(chan_in, chan_out, kernel_sizes, stride = strides, padding = paddings)
     )
 
@@ -310,12 +314,13 @@ class CausalConv1d(nn.Module):
         super().__init__()
         kernel_size = kernel_size
         dilation = kwargs.get('dilation', 1)
-        self.causal_padding = dilation * (kernel_size - 1)
+        stride = kwargs.get('stride', 1)
+        self.causal_padding = dilation * (kernel_size - 1) + (1 - stride)
 
         self.conv = nn.Conv1d(chan_in, chan_out, kernel_size, **kwargs)
 
     def forward(self, x):
-        x = F.pad(x, (self.causal_padding, 0))
+        x = F.pad(x, (self.causal_padding, 0), mode = 'reflect')
         return self.conv(x)
 
 class CausalConvTranspose1d(nn.Module):
@@ -404,95 +409,14 @@ class LocalTransformer(nn.Module):
 
         return x
 
-class EncodecWrapper(nn.Module):
-    def __init__(self,
-                 target_sample_hz=24000,
-                 strides=(2,4,5,8),
-                 num_quantizers=8,
-                 ):
+class FiLM(nn.Module):
+    def __init__(self, dim, dim_cond):
         super().__init__()
-        # Instantiate a pretrained EnCodec model
-        # We could try the 48kHz model, but 24kHz matches what was used in MusicLM and avoids any resampling issues
-        # Ideally with more time we figure out how to use 48kHz because that's specifically music, but until then we'll
-        # stick with 24kHz.
-        self.target_sample_hz = target_sample_hz
-        assert self.target_sample_hz == 24000, "haven't done anything with non-24kHz yet"
-        self.model = EncodecModel.encodec_model_24khz()
+        self.to_cond = nn.Linear(dim_cond, dim * 2)
 
-        # I'm going to guess that the codes can be the unscaled versions.
-        # TODO: see if we need to keep the scaled version and somehow persist the scale factors for when we need to decode?
-        self.model.normalize = False # this means we don't need to scale codes e.g. when running model.encode(wav)
-
-        # bandwidth affects num quantizers used: https://github.com/facebookresearch/encodec/pull/41
-        self.model.set_target_bandwidth(6.0)
-        assert num_quantizers == 8, "assuming 8 quantizers for now, see bandwidth comment above"
-        self.num_quantizers = num_quantizers
-        self.strides = strides # used in seq_len_multiple_of
-
-    @property
-    def seq_len_multiple_of(self):
-        return functools.reduce(lambda x, y: x * y, self.strides)
-
-    def forward(self, x, x_sampling_rate=24000, **kwargs):
-        # kwargs for stuff like return_encoded=True, which Soundstream uses but Encodec doesn't
-        assert not self.model.training, "Encodec is pretrained and should never be called outside eval mode."
-        # convert_audio up-samples if necessary, e.g. if wav has n samples at 16 kHz and model is 48 kHz,
-        # then resulting wav has 3n samples because you do n * 48/16
-        # Note: this is a bit of a hack but we avoid any resampling issues here if we just try 24kHz throughout
-        # which makes convert_audio a no-op
-        wav = convert_audio(x, x_sampling_rate, self.model.sample_rate, self.model.channels)
-        wav = wav.unsqueeze(0)
-        # Extract discrete codes from EnCodec
-        with torch.no_grad():
-            encoded_frames = self.model.encode(wav)
-        codes = torch.cat([encoded[0] for encoded in encoded_frames], dim=-1)  # [B, n_q, T]
-        # print(f"encodec codes shape {codes.shape}") # [1, 8, 32]
-        # correct, time is 320 * 32 and stride product is 320 so quotient is 32
-        # and we set it up so num quantizers is 8
-        return None, codes, None # in original soundstream, is x, indices, commit_loss. But we only use indices, so not relevant.
-
-    def decode_from_codebook_indices(self, quantized_indices):
-        # codes = self.rq.get_codes_from_indices(quantized_indices)
-        # x = reduce(codes, 'q ... -> ...', 'sum')
-        #
-        # x = self.decoder_attn(x)
-        # x = rearrange(x, 'b n c -> b c n')
-        # return self.decoder(x)
-        # 1 x 512 x 8 == batch x num tokens x num quantizers
-        # print(f"quantized_indices shape in decoding: {quantized_indices.shape}")
-
-        assert self.model.sample_rate == 24000,\
-            "if changing to 48kHz, that model segments its audio into lengths of 1.0 second with 1% overlap, whereas " \
-            "the 24kHz doesn't segment at all. this means the frame decode logic might change; this is a reminder to " \
-            "double check that."
-        # Since we're not doing any segmenting, we have all the frames already (1 frame = 1 token in quantized_indices)
-        # The following code is hacked in from self.model._decode_frame() where we skip the part about scales and assume we've already
-        # unwrapped the EncodedFrame
-        frames = self._decode_frame(quantized_indices)
-        # 1 frame because no segmenting, 1 x (num_frames * stride product)
-        # print(f"len(frames) {len(frames)} and first decoded frame shape: {frames[0].shape}")
-        result = _linear_overlap_add(frames, self.model.segment_stride or 1)
-        result = rearrange(result, 'b n -> b 1 n') # TODO: i'm not overly pleased with this because when this function gets called, we just rearrange the result back to b n anyways, but we'll keep this as a temporary hack just to make things work for now
-        # print(f"result shape {result.shape}") # batch x 1 x 163840
-        return result
-
-    def _decode_frame(self, quantized_indices):
-        # This function is pretty much copy pasted from self.model._decode_frame(), just skipping the EncodedFrame unwrapping and scale stuff.
-        # quantized_indices shape batch x (num coarse + fine tokens combined) x num_quantizers = 1 x 512 x 8
-        # output is of shape batch x num_channels x new_num_samples, where new_num_samples is num_frames * stride product
-        # num_frames, of course, is 512 == the number of tokens you have. one token per frame
-        # stride product is 320, which is the product of the strides in the model, so we predict out length should be
-        # 512 * 320 == 163840
-        codes = rearrange(quantized_indices, 'b t q -> q b t') # expected format for decoder
-        # print(f"codes.shape in decode_frame {codes.shape}") # n_q x batch x T
-        emb = self.model.quantizer.decode(codes)
-        # print(f"emb.shape in decode_frame {emb.shape}") # batch x embed_dimension x T (you can confirm the middle with self.model.quantizer.dimension
-        out = self.model.decoder(emb)
-        # print(f"out.shape in decode_frame {out.shape}") # batch x T
-        # see __init__ for assumption that scale is not used here.
-        # if scale is not None:
-        #     out = out * scale.view(-1, 1, 1)
-        return out
+    def forward(self, x, cond):
+        gamma, beta = self.to_cond(cond).chunk(2, dim = -1)
+        return x * gamma + beta
 
 class SoundStream(nn.Module):
     def __init__(
@@ -516,7 +440,7 @@ class SoundStream(nn.Module):
         multi_spectral_n_ffts = 512,
         multi_spectral_n_mels = 64,
         recon_loss_weight = 1.,
-        multi_spectral_recon_loss_weight = 1.,
+        multi_spectral_recon_loss_weight = 1e-5,
         adversarial_loss_weight = 1.,
         feature_loss_weight = 100,
         quantize_dropout_cutoff_index = 1,
@@ -529,7 +453,8 @@ class SoundStream(nn.Module):
         attn_xpos_scale_base = None,
         attn_dynamic_pos_bias = False,
         squeeze_excite = False,
-        complex_stft_discr_logits_abs = True
+        complex_stft_discr_logits_abs = True,
+        stft_discriminator: Optional[nn.Module] = None  # can pass in own stft discriminator
     ):
         super().__init__()
 
@@ -576,7 +501,11 @@ class SoundStream(nn.Module):
 
         self.encoder_attn = LocalTransformer(**attn_kwargs) if use_local_attn else None
 
+        self.encoder_film = FiLM(codebook_dim, dim_cond = 2)
+
         self.num_quantizers = rq_num_quantizers
+
+        self.codebook_dim = codebook_dim
 
         self.rq = ResidualVQ(
             dim = codebook_dim,
@@ -590,6 +519,8 @@ class SoundStream(nn.Module):
             quantize_dropout = True,
             quantize_dropout_cutoff_index = quantize_dropout_cutoff_index
         )
+
+        self.decoder_film = FiLM(codebook_dim, dim_cond = 2)
 
         self.decoder_attn = LocalTransformer(**attn_kwargs) if use_local_attn else None
 
@@ -611,10 +542,13 @@ class SoundStream(nn.Module):
         discr_rel_factors = [int(s1 / s2) for s1, s2 in zip(discr_multi_scales[:-1], discr_multi_scales[1:])]
         self.downsamples = nn.ModuleList([nn.Identity()] + [nn.AvgPool1d(2 * factor, stride = factor, padding = factor) for factor in discr_rel_factors])
 
-        self.stft_discriminator = ComplexSTFTDiscriminator(
-            stft_normalized = stft_normalized,
-            logits_abs = complex_stft_discr_logits_abs  # whether to output as abs() or use view_as_real
-        )
+        self.stft_discriminator = stft_discriminator
+
+        if not exists(self.stft_discriminator):
+            self.stft_discriminator = ComplexSTFTDiscriminator(
+                stft_normalized = stft_normalized,
+                logits_abs = complex_stft_discr_logits_abs  # whether to output as abs() or use view_as_real
+            )
 
         # multi spectral reconstruction
 
@@ -655,6 +589,10 @@ class SoundStream(nn.Module):
         self.register_buffer('zero', torch.tensor([0.]), persistent = False)
 
     @property
+    def device(self):
+        return next(self.parameters()).device
+
+    @property
     def configs(self):
         return pickle.loads(self._configs)
 
@@ -665,9 +603,17 @@ class SoundStream(nn.Module):
         # codes shape torch.Size([8, 1, 512, 512]) # codebook vectors are 512-dimensional as well.
         # n_quantizers x batch x num_timesteps x the actual 512 vector in codebook
         # print(f"codes shape {codes.shape}")
-        x = reduce(codes, 'q ... -> ...', 'sum') # einops.reduce, add the quantized vectors (the R in RVQ)
+        x = reduce(codes, 'q ... -> ...', 'sum')
+        # einops.reduce, add the quantized vectors (the R in RVQ)
         # x shape torch.Size([1, 512, 512])
         # print(f"x shape {x.shape}")
+
+        return self.decode(x)
+
+    def decode(self, x, quantize = False):
+        if quantize:
+            x, *_ = self.rq(x)
+
         x = self.decoder_attn(x)
         # x shape after decoder attn torch.Size([1, 512, 512]). shape unchanged.
         # print(f"x shape after decoder attn {x.shape}")
@@ -732,26 +678,16 @@ class SoundStream(nn.Module):
             *self.encoder.parameters(),
             *self.decoder.parameters(),
             *(self.encoder_attn.parameters() if exists(self.encoder_attn) else []),
-            *(self.decoder_attn.parameters() if exists(self.decoder_attn) else [])
+            *(self.decoder_attn.parameters() if exists(self.decoder_attn) else []),
+            *self.encoder_film.parameters(),
+            *self.decoder_film.parameters()
         ]
 
     @property
     def seq_len_multiple_of(self):
         return functools.reduce(lambda x, y: x * y, self.strides)
 
-    def forward(
-        self,
-        x,
-        return_encoded = False,
-        return_discr_loss = False,
-        return_discr_losses_separately = False,
-        return_loss_breakdown = False,
-        return_recons_only = False,
-        input_sample_hz = None,
-        apply_grad_penalty = False
-    ):
-        # print(f"x start shape {x.shape}") # 1 x 10240
-        # n == num timesteps
+    def process_input(self, x, input_sample_hz = None):
         x, ps = pack([x], '* n')
         # print(f"x packed {x.shape}")  # 1 x 10240
 
@@ -765,6 +701,28 @@ class SoundStream(nn.Module):
         if x.ndim == 2:
             x = rearrange(x, 'b n -> b 1 n')
 
+        return x, ps
+
+    def forward(
+        self,
+        x,
+        target = None,
+        is_denoising = None, # if you want to learn film conditioners that teach the soundstream to denoise - target would need to be passed in above
+        return_encoded = False,
+        return_discr_loss = False,
+        return_discr_losses_separately = False,
+        return_loss_breakdown = False,
+        return_recons_only = False,
+        input_sample_hz = None,
+        apply_grad_penalty = False
+    ):
+        assert not (exists(is_denoising) and not exists(target))
+
+        x, ps = self.process_input(x, input_sample_hz = input_sample_hz)
+
+        if exists(target):
+            target, _ = self.process_input(target, input_sample_hz = input_sample_hz)
+
         orig_x = x.clone()
 
         # print(f"x.shape pre-encoder {x.shape}")  # 1 x 1 x 10240
@@ -776,6 +734,10 @@ class SoundStream(nn.Module):
         if exists(self.encoder_attn):
             x = self.encoder_attn(x)
         # print(f"x.shape pre-rq, {x.shape}") # 1 x 32 x 512 just rearranged from after encoder
+        if exists(is_denoising):
+            denoise_input = torch.tensor([is_denoising, not is_denoising], dtype = x.dtype, device = self.device) # [1, 0] for denoise, [0, 1] for not denoising
+            x = self.encoder_film(x, denoise_input)
+
         x, indices, commit_loss = self.rq(x)
         # 1 is batch size, 8 is rq num quantizers, 32 is number of frames (result of striding factor and number of timesteps)
         # basically: max_data_length = 320 * 32 == 10240 so original x shape is [1, 10240]. then 10240 / ( 2 * 4 * 5 * 8) = 32
@@ -784,14 +746,16 @@ class SoundStream(nn.Module):
         # print(f"soundstream indices shape: {indices.shape}") # 1 x 32 x 8
         # Each of the 32 frames is a vector of 8 integers, each integer is an index into the 512 codebook vectors
 
+        if return_encoded:
+            return x, indices, commit_loss
+
+        if exists(is_denoising):
+            x = self.decoder_film(x, denoise_input)
+
         if exists(self.decoder_attn):
             x = self.decoder_attn(x)
 
         x = rearrange(x, 'b n c -> b c n')
-
-        if return_encoded:
-
-            return x, indices, commit_loss
 
         recon_x = self.decoder(x)
 
@@ -857,7 +821,9 @@ class SoundStream(nn.Module):
 
         # recon loss
 
-        recon_loss = F.mse_loss(orig_x, recon_x)
+        target = default(target, orig_x)  # target can also be passed in, in the case of denoising
+
+        recon_loss = F.mse_loss(target, recon_x)
 
         # multispectral recon loss - eq (4) and (5) in https://arxiv.org/abs/2107.03312
 

@@ -461,8 +461,8 @@ class Transformer(nn.Module):
 
 # the three hierarchical transformers
 
-@beartype
 class SemanticTransformer(nn.Module):
+    @beartype
     def __init__(
         self,
         *,
@@ -532,6 +532,7 @@ class SemanticTransformer(nn.Module):
         null_logits = self.forward(*args, cond_drop_prob = 1., **kwargs)
         return null_logits + (logits - null_logits) * cond_scale
 
+    @beartype
     def forward(
         self,
         *,
@@ -580,8 +581,8 @@ class SemanticTransformer(nn.Module):
         tokens = self.transformer(tokens, context = text_embeds, self_attn_mask = self_attn_mask, context_mask = text_mask)
         return self.to_logits(tokens)
 
-@beartype
 class CoarseTransformer(nn.Module):
+    @beartype
     def __init__(
         self,
         *,
@@ -673,6 +674,7 @@ class CoarseTransformer(nn.Module):
         scaled_coarse_logits = null_coarse_logits + (coarse_logits - null_coarse_logits) * cond_scale
         return scaled_semantic_logits, scaled_coarse_logits
 
+    @beartype
     def forward(
         self,
         *,
@@ -1119,8 +1121,8 @@ class FineTransformer(nn.Module):
 
 # training wrappers
 
-@beartype
 class SemanticTransformerWrapper(nn.Module):
+    @beartype
     def __init__(
         self,
         *,
@@ -1297,8 +1299,8 @@ class SemanticTransformerWrapper(nn.Module):
 
         return loss
 
-@beartype
 class CoarseTransformerWrapper(nn.Module):
+    @beartype
     def __init__(
         self,
         *,
@@ -1447,8 +1449,8 @@ class CoarseTransformerWrapper(nn.Module):
                 # still batch x data_max_length e.g. [1 x 10240]
                 # print(f"raw_wave_for_codec provided for coarse transformer wrapper. raw_wave.shape {raw_wave_for_codec.shape} and device {raw_wave_for_codec.device}")
                 _, indices, _ = self.codec(raw_wave_for_codec, return_encoded = True)
-                batch = raw_wave.shape[0]
-                num_timesteps = raw_wave.shape[1]
+                batch = raw_wave_for_codec.shape[0]
+                num_timesteps = raw_wave_for_codec.shape[1]
                 num_frames = int(num_timesteps / self.codec.seq_len_multiple_of)
                 assert indices.shape[0] == batch and indices.shape[1] == num_frames, \
                     f'Expected indices to have shape (batch, num_frames, num_coarse_quantizers + num_fine_quantizers), but got {indices.shape}'
@@ -1522,8 +1524,8 @@ class CoarseTransformerWrapper(nn.Module):
             coarse_loss * num_coarse_logits
         ) / (num_semantic_logits + num_coarse_logits)
 
-@beartype
 class FineTransformerWrapper(nn.Module):
+    @beartype
     def __init__(
         self,
         *,
@@ -1756,8 +1758,8 @@ class FineTransformerWrapper(nn.Module):
 
 # audio LM
 
-@beartype
 class AudioLM(nn.Module):
+    @beartype
     def __init__(
         self,
         *,

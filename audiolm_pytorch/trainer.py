@@ -114,6 +114,7 @@ def determine_types(data, config):
 # main trainer class
 
 class SoundStreamTrainer(nn.Module):
+    @beartype
     def __init__(
         self,
         soundstream: SoundStream,
@@ -121,7 +122,7 @@ class SoundStreamTrainer(nn.Module):
         num_train_steps: int,
         batch_size: int,
         data_max_length: int = None,
-        data_max_length_seconds: float = None,
+        data_max_length_seconds: Union[int, float] = None,
         folder: str = None,
         train_dataloader: DataLoader = None,
         val_dataloader: DataLoader = None,
@@ -524,8 +525,8 @@ class SoundStreamTrainer(nn.Module):
 
 # semantic transformer trainer
 
-@beartype
 class SemanticTransformerTrainer(nn.Module):
+    @beartype
     def __init__(
         self,
         wav2vec: Optional[Union[FairseqVQWav2Vec, HubertWithKmeans]],
@@ -763,8 +764,8 @@ class SemanticTransformerTrainer(nn.Module):
 
 # fine transformer trainer
 
-@beartype
 class CoarseTransformerTrainer(nn.Module):
+    @beartype
     def __init__(
         self,
         transformer: CoarseTransformer,
@@ -1013,8 +1014,8 @@ class CoarseTransformerTrainer(nn.Module):
 
 # fine transformer trainer
 
-@beartype
 class FineTransformerTrainer(nn.Module):
+    @beartype
     def __init__(
         self,
         transformer: FineTransformer,

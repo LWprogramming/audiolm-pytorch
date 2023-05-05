@@ -122,7 +122,12 @@ class HubertWithKmeans(nn.Module):
             embed = all_layer_hidden_states[self.layer] # timesteps x 768 feature_dim
             packed_shape = [torch.Size([1, embed.shape[0]])] # extremely hacky way to replicate einops.pack behavior for packed_shape
         else:
-            embed = self.model(wav_input, features_only = True, output_layer = self.output_layer)
+            embed = self.model(
+                wav_input,
+                features_only=True,
+                mask=False,  # thanks to @maitycyrus for noticing that mask is defaulted to True in the fairseq code
+                output_layer=self.output_layer
+            )
             # print(f"embed.keys(): {embed.keys()}")
             # padding_mask is also a key but it's None
             # print(f"type(wav_input) {type(wav_input)} and shape: {wav_input.shape}") # 1 x 10240 in the example, dependent on max_length or whatever that parameter is

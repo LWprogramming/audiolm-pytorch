@@ -1,7 +1,11 @@
 from functools import reduce
-from einops import rearrange
+from einops import rearrange, pack, unpack
+
 import torch
 from torch import nn
+
+from vector_quantize_pytorch import ResidualVQ
+
 from encodec import EncodecModel
 from encodec.utils import _linear_overlap_add
 
@@ -17,11 +21,12 @@ class EncodecWrapper(nn.Module):
     -
 
     """
-    def __init__(self,
-                 target_sample_hz=24000,
-                 strides=(2,4,5,8),
-                 num_quantizers=8,
-                 ):
+    def __init__(
+        self,
+        target_sample_hz = 24000,
+        strides = (2, 4, 5, 8),
+        num_quantizers = 8,
+    ):
         super().__init__()
         # Instantiate a pretrained EnCodec model
         self.model = EncodecModel.encodec_model_24khz()
@@ -34,14 +39,42 @@ class EncodecWrapper(nn.Module):
         # Fields that SoundStream has that get used externally. We replicate them here.
         self.target_sample_hz = target_sample_hz
         assert self.target_sample_hz == 24000, "haven't done anything with non-24kHz yet"
+
+        self.codebook_dim = 128
         self.num_quantizers = num_quantizers
         self.strides = strides # used in seq_len_multiple_of
+
+        # cross entropy loss to indices passed in on l2 distance logits introduced in vector-quantize-pytorch 1.2.2
+
+        self.rq = ResidualVQ(
+            dim = 128,
+            codebook_size = 1024,
+            num_quantizers = 8
+        )
+
+        # copy codebook over to ResidualVQ for cross entropy loss logic from naturalspeech2
+        # luckily, it seems Meta AI basically used my ResidualVQ code verbatim. makes porting it over easy
+
+        for encodec_rq_layer, rq_layer in zip(self.model.quantizer.vq.layers, self.rq.layers):
+            encodec_codebook = dict(encodec_rq_layer._codebook.named_buffers()).get('embed')
+            vq_codebook = dict(rq_layer._codebook.named_buffers()).get('embed')
+
+            encodec_codebook = rearrange(encodec_codebook, '... -> 1 ...')
+            vq_codebook.copy_(encodec_codebook)
 
     @property
     def seq_len_multiple_of(self):
         return reduce(lambda x, y: x * y, self.strides)
 
-    def forward(self, x, **kwargs):
+    def forward(
+        self,
+        x,
+        return_encoded = False,
+        **kwargs
+    ):
+
+        x, ps = pack([x], '* n')
+
         # kwargs for stuff like return_encoded=True, which SoundStream uses but Encodec doesn't
         assert not self.model.training, "Encodec is pretrained and should never be called outside eval mode."
         # Unlike in the Encodec sample code in its README, x has already been resampled so we don't need to call
@@ -61,7 +94,17 @@ class EncodecWrapper(nn.Module):
         # transformer code that uses codec expects codes to be [batch, timesteps, num_quantizers]
         codes = rearrange(codes, 'b q n -> b n q')  # result: [batch, timesteps, num_quantizers]
         # in original soundstream, is x, indices, commit_loss. But we only use indices in eval mode, so just keep that.
-        return None, codes, None
+
+        # allow for returning of sum of quantized embeddings
+
+        emb = None
+        if return_encoded:
+            emb = self.get_emb_from_indices(codes)
+
+        emb, = unpack(emb, ps, '* n c')
+        codes, = unpack(codes, ps, '* n q')
+
+        return emb, codes, None
 
     def decode_from_codebook_indices(self, quantized_indices):
         # Input: batch x num tokens x num quantizers
@@ -81,6 +124,15 @@ class EncodecWrapper(nn.Module):
         # TODO: I'm not overly pleased with this because when this function gets called, we just rearrange the result
         #   back to b n anyways, but we'll keep this as a temporary hack just to make things work for now
         return rearrange(result, 'b n -> b 1 n')
+
+    def get_emb_from_indices(self, indices):
+        codes = rearrange(indices, 'b t q -> q b t')
+        emb = self.model.quantizer.decode(codes)
+        return rearrange(emb, 'b c n -> b n c')
+
+    def decode(self, emb):
+        emb = rearrange(emb, 'b n c -> b c n')
+        return self.model.decoder(emb)
 
     def _decode_frame(self, quantized_indices):
         # The following code is hacked in from self.model._decode_frame() (Encodec version 0.1.1) where we assume we've

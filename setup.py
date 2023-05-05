@@ -21,7 +21,7 @@ setup(
   install_requires=[
     'accelerate',
     'beartype',
-    'einops>=0.6',
+    'einops>=0.6.1',
     'ema-pytorch>=0.2.2',
     'encodec',
     'fairseq',
@@ -34,7 +34,7 @@ setup(
     'torchaudio',
     'transformers',
     'tqdm',
-    'vector-quantize-pytorch>=1.0.6'
+    'vector-quantize-pytorch>=1.2.2'
   ],
   classifiers=[
     'Development Status :: 4 - Beta',
