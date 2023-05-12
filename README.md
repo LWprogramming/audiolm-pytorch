@@ -63,6 +63,7 @@ from audiolm_pytorch import SoundStream, SoundStreamTrainer
 soundstream = SoundStream(
     codebook_size = 1024,
     rq_num_quantizers = 8,
+    rq_groups = 2,                # this paper proposes using multi-headed residual vector quantization - https://arxiv.org/abs/2305.02765
     attn_window_size = 128,       # local attention receptive field at bottleneck
     attn_depth = 2                # 2 local attention transformer blocks - the soundstream folks were not experts with attention, so i took the liberty to add some. encodec went with lstms, but attention should be better
 )
@@ -331,16 +332,14 @@ $ accelerate launch train.py
 - [x] add structured dropout from forgetful causal masking, far better than traditional dropouts
 - [x] figure out how to suppress logging in fairseq
 - [x] assert that all three transformers passed into audiolm is compatible
+- [x] allow for specialized relative positional embeddings in fine transformer based on absolute matching positions of quantizers between coarse and fine
+- [x] allow for grouped residual vq in soundstream (use `GroupedResidualVQ` from vector-quantize-pytorch lib), from <a href="https://arxiv.org/abs/2305.02765">hifi-codec</a>
 
-- [ ] figure out how to do the normalization across each dimension mentioned in the paper, but ignore it for v1 of the framework
-- [ ] DRY a little at the end
+- [ ] redo the positional embeddings in the presence of groups in residual vq
 - [ ] test with speech synthesis for starters
-- [ ] add option to use flash attention
-- [ ] simplify training even more within AudioLM class
 - [ ] cli tool, something like `audiolm generate <wav.file | text>` and save generated wav file to local directory
 - [ ] return a list of waves in the case of variable lengthed audio
 - [ ] just take care of the edge case in coarse transformer text conditioned training, where the raw wave is resampled at different frequencies. autodetermine how to route based on length
-- [ ] allow for specialized relative positional embeddings in fine transformer based on absolute matching positions of quantizers between coarse and fine
 
 ## Citations
 
@@ -485,5 +484,13 @@ $ accelerate launch train.py
     journal = {2018 IEEE/CVF Conference on Computer Vision and Pattern Recognition},
     year    = {2017},
     pages   = {7132-7141}
+}
+```
+
+```bibtex
+@inproceedings{Yang2023HiFiCodecGV,
+    title   = {HiFi-Codec: Group-residual Vector quantization for High Fidelity Audio Codec},
+    author  = {Dongchao Yang and Songxiang Liu and Rongjie Huang and Jinchuan Tian and Chao Weng and Yuexian Zou},
+    year    = {2023}
 }
 ```
