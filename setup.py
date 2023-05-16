@@ -34,7 +34,10 @@ setup(
     'torchaudio',
     'transformers',
     'tqdm',
-    'vector-quantize-pytorch>=1.4.1'
+    'vector-quantize-pytorch>=1.4.1',
+    # then my personal hacks
+    'psutil',
+    'gpustat',
   ],
   classifiers=[
     'Development Status :: 4 - Beta',
