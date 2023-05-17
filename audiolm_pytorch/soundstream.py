@@ -687,7 +687,12 @@ class SoundStream(nn.Module):
     def seq_len_multiple_of(self):
         return functools.reduce(lambda x, y: x * y, self.strides)
 
-    def process_input(self, x, input_sample_hz = None):
+    def process_input(
+        self,
+        x,
+        input_sample_hz = None,
+        curtail_from_left = False
+    ):
         x, ps = pack([x], '* n')
         # print(f"x packed {x.shape}")  # 1 x 10240
 
@@ -695,7 +700,7 @@ class SoundStream(nn.Module):
             x = resample(x, input_sample_hz, self.target_sample_hz)
             # print(f"x resampled {x.shape}")
 
-        x = curtail_to_multiple(x, self.seq_len_multiple_of)
+        x = curtail_to_multiple(x, self.seq_len_multiple_of, from_left = curtail_from_left)
         # print(f"x curtail to multipled {x.shape}") # 1 x 10240
 
         if x.ndim == 2:
@@ -714,14 +719,17 @@ class SoundStream(nn.Module):
         return_loss_breakdown = False,
         return_recons_only = False,
         input_sample_hz = None,
-        apply_grad_penalty = False
+        apply_grad_penalty = False,
+        curtail_from_left = False
     ):
         assert not (exists(is_denoising) and not exists(target))
 
-        x, ps = self.process_input(x, input_sample_hz = input_sample_hz)
+        process_input = partial(self.process_input, input_sample_hz = input_sample_hz, curtail_from_left = curtail_from_left)
+
+        x, ps = process_input(x)
 
         if exists(target):
-            target, _ = self.process_input(target, input_sample_hz = input_sample_hz)
+            target, _ = process_input(target)
 
         orig_x = x.clone()
 
