@@ -727,7 +727,17 @@ class SemanticTransformerTrainer(nn.Module):
 
         for _ in range(self.grad_accum_every):
             data_kwargs = self.data_tuple_to_kwargs(next(self.dl_iter))
-
+            if self.steps == 0:
+                # write the audio to file named something like out-{datetime}.wav to double-check the data is correct
+                print(f"semantic data inspection: data_kwargs.keys() = {data_kwargs.keys()}")
+                # wav = data_kwargs['audio']
+                # wav = wav[0].cpu().numpy()
+                # wav = wav.astype(np.float32)
+                # wav = wav / np.max(np.abs(wav))
+                # wav = wav * 0.99
+                # wav = wav * 32767
+                # wav = wav.astype(np.int16)
+                # wavfile.write(f"out-{datetime.now()}.wav", 16000, wav)
             loss = self.train_wrapper(**data_kwargs, return_loss = True)
 
             self.accelerator.backward(loss / self.grad_accum_every)
@@ -973,7 +983,9 @@ class CoarseTransformerTrainer(nn.Module):
 
         for _ in range(self.grad_accum_every):
             data_kwargs = dict(zip(self.ds_fields, next(self.dl_iter)))
-
+            if self.steps == 0:
+                # write the audio to file named something like out-{datetime}.wav to double-check the data is correct
+                print(f"semantic data inspection: data_kwargs.keys() = {data_kwargs.keys()}")
             loss = self.train_wrapper(
                 **data_kwargs,
                 return_loss = True
@@ -1227,6 +1239,9 @@ class FineTransformerTrainer(nn.Module):
 
         for _ in range(self.grad_accum_every):
             data_kwargs = self.data_tuple_to_kwargs(next(self.dl_iter))
+            if self.steps == 0:
+                # write the audio to file named something like out-{datetime}.wav to double-check the data is correct
+                print(f"semantic data inspection: data_kwargs.keys() = {data_kwargs.keys()}")
             loss = self.train_wrapper(**data_kwargs, return_loss = True)
 
             self.accelerator.backward(loss / self.grad_accum_every)
