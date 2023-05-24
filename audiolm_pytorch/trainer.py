@@ -731,7 +731,8 @@ class SemanticTransformerTrainer(nn.Module):
             if self.steps == 0:
                 # write the audio to file named something like out-{datetime}.wav to double-check the data is correct
                 output_path = str(self.results_folder / f'semantic-input-data-{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.wav')
-                generated_wav = data_kwargs['raw_wave'].unsqueeze(0)
+                generated_wav = data_kwargs['raw_wave']
+                print(f"semantic generated_wav.shape = {generated_wav.shape}")
                 torchaudio.save(output_path, generated_wav.cpu(), 24000)
                 # print(f"semantic data inspection: data_kwargs.keys() = {data_kwargs.keys()}")
             loss = self.train_wrapper(**data_kwargs, return_loss = True)
@@ -902,7 +903,7 @@ class CoarseTransformerTrainer(nn.Module):
         self.valid_dl_iter = cycle(self.valid_dl)
 
         self.save_model_every = save_model_every
-        self.save_results_every = save_results_every    
+        self.save_results_every = save_results_every
 
         self.results_folder = Path(results_folder)
 
@@ -912,7 +913,7 @@ class CoarseTransformerTrainer(nn.Module):
         self.results_folder.mkdir(parents = True, exist_ok = True)
 
         hps = {"num_train_steps": num_train_steps, "data_max_length": data_max_length, "learning_rate": lr}
-        self.accelerator.init_trackers("coarse", config=hps)        
+        self.accelerator.init_trackers("coarse", config=hps)
 
         self.train_wrapper.to(self.device)
 
@@ -982,7 +983,8 @@ class CoarseTransformerTrainer(nn.Module):
             if self.steps == 0:
                 # write the audio to file named something like out-{datetime}.wav to double-check the data is correct
                 output_path = str(self.results_folder / f'coarse-input-data-{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.wav')
-                generated_wav = data_kwargs['raw_wave'].unsqueeze(0)
+                generated_wav = data_kwargs['raw_wave']
+                print(f"coarse generated_wav.shape = {generated_wav.shape}")
                 torchaudio.save(output_path, generated_wav.cpu(), 24000)
                 # print(f"coarse data inspection: data_kwargs.keys() = {data_kwargs.keys()}")
             loss = self.train_wrapper(
@@ -1154,7 +1156,7 @@ class FineTransformerTrainer(nn.Module):
         self.valid_dl_iter = cycle(self.valid_dl)
 
         self.save_model_every = save_model_every
-        self.save_results_every = save_results_every    
+        self.save_results_every = save_results_every
 
         self.results_folder = Path(results_folder)
 
@@ -1164,7 +1166,7 @@ class FineTransformerTrainer(nn.Module):
         self.results_folder.mkdir(parents = True, exist_ok = True)
 
         hps = {"num_train_steps": num_train_steps, "data_max_length": data_max_length, "learning_rate": lr}
-        self.accelerator.init_trackers("fine", config=hps)        
+        self.accelerator.init_trackers("fine", config=hps)
 
         self.train_wrapper.to(self.device)
 
@@ -1241,7 +1243,8 @@ class FineTransformerTrainer(nn.Module):
             if self.steps == 0:
                 # write the audio to file named something like out-{datetime}.wav to double-check the data is correct
                 output_path = str(self.results_folder / f'fine-input-data-{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.wav')
-                generated_wav = data_kwargs['raw_wave'].unsqueeze(0)
+                generated_wav = data_kwargs['raw_wave']
+                print(f"fine data inspection: generated_wav.shape = {generated_wav.shape}")
                 torchaudio.save(output_path, generated_wav.cpu(), 24000)
                 # print(f"fine data inspection: data_kwargs.keys() = {data_kwargs.keys()}")
             loss = self.train_wrapper(**data_kwargs, return_loss = True)
