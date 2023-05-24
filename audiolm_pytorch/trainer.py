@@ -16,6 +16,7 @@ import torch
 import torchaudio
 from torch import nn
 from torch.utils.data import Dataset, DataLoader, random_split
+import datetime
 
 from einops import rearrange
 
@@ -729,15 +730,10 @@ class SemanticTransformerTrainer(nn.Module):
             data_kwargs = self.data_tuple_to_kwargs(next(self.dl_iter))
             if self.steps == 0:
                 # write the audio to file named something like out-{datetime}.wav to double-check the data is correct
-                print(f"semantic data inspection: data_kwargs.keys() = {data_kwargs.keys()}")
-                # wav = data_kwargs['audio']
-                # wav = wav[0].cpu().numpy()
-                # wav = wav.astype(np.float32)
-                # wav = wav / np.max(np.abs(wav))
-                # wav = wav * 0.99
-                # wav = wav * 32767
-                # wav = wav.astype(np.int16)
-                # wavfile.write(f"out-{datetime.now()}.wav", 16000, wav)
+                output_path = str(self.results_folder / f'semantic-input-data-{datetime.now().strftime("%Y%m%d-%H%M%S")}.wav')
+                generated_wav = data_kwargs['raw_wave'].unsqueeze(0)
+                torchaudio.save(output_path, generated_wav.cpu(), 24000)
+                # print(f"semantic data inspection: data_kwargs.keys() = {data_kwargs.keys()}")
             loss = self.train_wrapper(**data_kwargs, return_loss = True)
 
             self.accelerator.backward(loss / self.grad_accum_every)
@@ -985,7 +981,10 @@ class CoarseTransformerTrainer(nn.Module):
             data_kwargs = dict(zip(self.ds_fields, next(self.dl_iter)))
             if self.steps == 0:
                 # write the audio to file named something like out-{datetime}.wav to double-check the data is correct
-                print(f"semantic data inspection: data_kwargs.keys() = {data_kwargs.keys()}")
+                output_path = str(self.results_folder / f'coarse-input-data-{datetime.now().strftime("%Y%m%d-%H%M%S")}.wav')
+                generated_wav = data_kwargs['raw_wave'].unsqueeze(0)
+                torchaudio.save(output_path, generated_wav.cpu(), 24000)
+                # print(f"coarse data inspection: data_kwargs.keys() = {data_kwargs.keys()}")
             loss = self.train_wrapper(
                 **data_kwargs,
                 return_loss = True
@@ -1241,7 +1240,10 @@ class FineTransformerTrainer(nn.Module):
             data_kwargs = self.data_tuple_to_kwargs(next(self.dl_iter))
             if self.steps == 0:
                 # write the audio to file named something like out-{datetime}.wav to double-check the data is correct
-                print(f"semantic data inspection: data_kwargs.keys() = {data_kwargs.keys()}")
+                output_path = str(self.results_folder / f'fine-input-data-{datetime.now().strftime("%Y%m%d-%H%M%S")}.wav')
+                generated_wav = data_kwargs['raw_wave'].unsqueeze(0)
+                torchaudio.save(output_path, generated_wav.cpu(), 24000)
+                # print(f"fine data inspection: data_kwargs.keys() = {data_kwargs.keys()}")
             loss = self.train_wrapper(**data_kwargs, return_loss = True)
 
             self.accelerator.backward(loss / self.grad_accum_every)
