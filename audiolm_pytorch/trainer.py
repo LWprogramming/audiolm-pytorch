@@ -730,7 +730,7 @@ class SemanticTransformerTrainer(nn.Module):
             data_kwargs = self.data_tuple_to_kwargs(next(self.dl_iter))
             if self.steps == 0:
                 # write the audio to file named something like out-{datetime}.wav to double-check the data is correct
-                output_path = str(self.results_folder / f'semantic-input-data-{datetime.now().strftime("%Y%m%d-%H%M%S")}.wav')
+                output_path = str(self.results_folder / f'semantic-input-data-{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.wav')
                 generated_wav = data_kwargs['raw_wave'].unsqueeze(0)
                 torchaudio.save(output_path, generated_wav.cpu(), 24000)
                 # print(f"semantic data inspection: data_kwargs.keys() = {data_kwargs.keys()}")
@@ -981,7 +981,7 @@ class CoarseTransformerTrainer(nn.Module):
             data_kwargs = dict(zip(self.ds_fields, next(self.dl_iter)))
             if self.steps == 0:
                 # write the audio to file named something like out-{datetime}.wav to double-check the data is correct
-                output_path = str(self.results_folder / f'coarse-input-data-{datetime.now().strftime("%Y%m%d-%H%M%S")}.wav')
+                output_path = str(self.results_folder / f'coarse-input-data-{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.wav')
                 generated_wav = data_kwargs['raw_wave'].unsqueeze(0)
                 torchaudio.save(output_path, generated_wav.cpu(), 24000)
                 # print(f"coarse data inspection: data_kwargs.keys() = {data_kwargs.keys()}")
@@ -1240,7 +1240,7 @@ class FineTransformerTrainer(nn.Module):
             data_kwargs = self.data_tuple_to_kwargs(next(self.dl_iter))
             if self.steps == 0:
                 # write the audio to file named something like out-{datetime}.wav to double-check the data is correct
-                output_path = str(self.results_folder / f'fine-input-data-{datetime.now().strftime("%Y%m%d-%H%M%S")}.wav')
+                output_path = str(self.results_folder / f'fine-input-data-{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.wav')
                 generated_wav = data_kwargs['raw_wave'].unsqueeze(0)
                 torchaudio.save(output_path, generated_wav.cpu(), 24000)
                 # print(f"fine data inspection: data_kwargs.keys() = {data_kwargs.keys()}")
