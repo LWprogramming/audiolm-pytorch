@@ -91,7 +91,7 @@ class EncodecWrapper(nn.Module):
         # encoded_frames is a list of (frame, scale) tuples. Scale is a scalar but we don't use it. Frame is a tensor
         # of shape [batch, num_quantizers, num_samples_per_frame]. We want to concatenate the frames to get all the
         # timesteps concatenated.
-        codes = torch.cat([encoded[0] for encoded in encoded_frames], dim=1)  # [batch, num_quantizers, timesteps]
+        codes = torch.cat([encoded[0] for encoded in encoded_frames], dim=-1)  # [batch, num_quantizers, timesteps]
         # transformer code that uses codec expects codes to be [batch, timesteps, num_quantizers]
         codes = rearrange(codes, 'b q n -> b n q')  # result: [batch, timesteps, num_quantizers]
         # in original soundstream, is x, indices, commit_loss. But we only use indices in eval mode, so just keep that.
@@ -99,10 +99,11 @@ class EncodecWrapper(nn.Module):
         # allow for returning of sum of quantized embeddings
 
         emb = None
+
         if return_encoded:
             emb = self.get_emb_from_indices(codes)
+            emb, = unpack(emb, ps, '* n c')
 
-        emb, = unpack(emb, ps, '* n c')
         codes, = unpack(codes, ps, '* n q')
 
         return emb, codes, None
