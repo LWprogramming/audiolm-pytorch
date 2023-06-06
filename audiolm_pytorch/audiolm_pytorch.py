@@ -994,6 +994,7 @@ class FineTransformer(nn.Module):
         assert self.coarse_embedding.embedding_dim == self.dim
         print(f"coarse_token_ids dump: {coarse_token_ids}")
         coarse_tokens = self.coarse_embedding(coarse_token_ids)
+        print("finished coarse embedding")
         fine_tokens = self.fine_embedding(fine_token_ids)
 
         coarse_quantize_tokens = repeat(self.coarse_quantize_embedding.weight, 'q d -> (n q) d', n = ceil_div(coarse_token_ids.shape[-1], self.num_coarse_quantizers))
@@ -1879,6 +1880,7 @@ class AudioLM(nn.Module):
         values = coarse_token_ids_or_recon_wave[indices].tolist()
         print("Indices:", indices)
         print("Values:", values)
+        # TODO
         if return_coarse_generated_wave:
             return coarse_token_ids_or_recon_wave
 
