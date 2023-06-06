@@ -350,6 +350,7 @@ class Attention(nn.Module):
         k = k * self.k_scale
 
         # similarities
+        self.dim_head = self.q_scale.shape[0] # oops, not saved
         print(f"q shape: {q.shape}, k shape: {k.shape}, self.scale: {self.scale}")
         print(f"expected b to be {b}, h to be {self.heads}, n to be {n}, d to be {self.dim_head}, i to be {n}, j to be {n}")
         print(f"verify q shape: {q.shape}, does it match {b} {self.heads} {n} {self.dim_head}")
