@@ -353,8 +353,8 @@ class Attention(nn.Module):
         d_head = self.q_scale.shape[0] # oops, not saved in class
         # print(f"q shape: {q.shape}, k shape: {k.shape}, self.scale: {self.scale}")
         # print(f"expected b to be {b}, h to be {self.heads}, n to be {n}, d to be {d_head}, i to be {n}, j to be {n}")
-        assert q.shape == (b, self.heads, n, d_head), f"q shape: {q.shape}, k shape: {k.shape}, self.scale: {self.scale}"
-        assert k.shape == (b, self.heads, n, d_head), f"q shape: {q.shape}, k shape: {k.shape}, self.scale: {self.scale}"
+        assert q.shape == (b, self.heads, n, d_head), f"q shape: {q.shape} but expected bhid {b} {self.heads} {n} {d_head}"
+        assert k.shape == (b, n, d_head), f"k shape: {k.shape} but expected bjd {b} {n} {d_head}"
         # print(f"verify q shape: {q.shape}, does it match {b} {self.heads} {n} {d_head}")
         # print(f"verify k shape: {k.shape}, does it match {b} {n} {d_head}")
         sim = einsum('b h i d, b j d -> b h i j', q, k) * self.scale
