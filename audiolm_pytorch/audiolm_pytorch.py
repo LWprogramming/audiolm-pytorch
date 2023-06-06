@@ -1402,6 +1402,8 @@ class CoarseTransformerWrapper(nn.Module):
 
         init_coarse_time_step = coarse_token_ids.shape[-1]
         sampled_coarse_token_ids = coarse_token_ids.clone()
+        # TODO:inserted here
+        assert torch.all(sampled_coarse_token_ids >= 0), "There are negative values in sampled_coarse_token_ids"
 
         for time_step in tqdm(range(init_coarse_time_step, max_time_steps), desc = 'generating coarse'):
             for ind in range(self.num_coarse_quantizers):
@@ -1875,10 +1877,9 @@ class AudioLM(nn.Module):
             semantic_token_ids = semantic_token_ids,
             reconstruct_wave = return_coarse_generated_wave
         )
-        indices = torch.nonzero((coarse_token_ids_or_recon_wave < 0) | (coarse_token_ids_or_recon_wave > 1536),
-                                as_tuple=True)
+        indices = torch.nonzero((coarse_token_ids_or_recon_wave < 0) | (coarse_token_ids_or_recon_wave > 1536))
         values = coarse_token_ids_or_recon_wave[indices].tolist()
-        print("Indices:", indices)
+        print("Indices:", indices.tolist())
         print("Values:", values)
         # TODO
         if return_coarse_generated_wave:
