@@ -976,6 +976,23 @@ class FineTransformer(nn.Module):
         fine_offsets = fine_offsets[:fine_length]
         fine_token_ids = fine_token_ids + rearrange(fine_offsets, '... -> 1 ...') * self.codebook_size
 
+
+        # TODO: cuda failed on coarse embedding. continue from here, printing out what the problem is
+        print("coarse_token_ids.shape", coarse_token_ids.shape)
+        # num_embeddings: int
+        # embedding_dim: int
+        # padding_idx: Optional[int]
+        # max_norm: Optional[float]
+        # norm_type: float
+        # scale_grad_by_freq: bool
+        # weight: Tensor
+        # sparse: bool
+        # embedding fields ^
+        # = nn.Embedding(num_coarse_quantizers * codebook_size, dim)
+        print(f"coarse embedding characteristics: num_embeddings {self.coarse_embedding.num_embeddings} and embed dim "
+              f"{self.coarse_embedding.embedding_dim}. expected {self.num_coarse_quantizers} * {self.codebook_size} = {self.num_coarse_quantizers * self.codebook_size} for first dimension")
+        assert self.coarse_embedding.num_embeddings == self.num_coarse_quantizers * self.codebook_size
+        assert self.coarse_embedding.embedding_dim == self.transformer.dim
         coarse_tokens = self.coarse_embedding(coarse_token_ids)
         fine_tokens = self.fine_embedding(fine_token_ids)
 
