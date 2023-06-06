@@ -976,7 +976,6 @@ class FineTransformer(nn.Module):
         fine_offsets = fine_offsets[:fine_length]
         fine_token_ids = fine_token_ids + rearrange(fine_offsets, '... -> 1 ...') * self.codebook_size
 
-
         # TODO: cuda failed on coarse embedding. continue from here, printing out what the problem is
         print("coarse_token_ids.shape", coarse_token_ids.shape)
         # num_embeddings: int
@@ -993,6 +992,7 @@ class FineTransformer(nn.Module):
               f"{self.coarse_embedding.embedding_dim}. expected {self.num_coarse_quantizers} * {self.codebook_size} = {self.num_coarse_quantizers * self.codebook_size} for first dimension")
         assert self.coarse_embedding.num_embeddings == self.num_coarse_quantizers * self.codebook_size
         assert self.coarse_embedding.embedding_dim == self.dim
+        print(f"coarse_token_ids dump: {coarse_token_ids}")
         coarse_tokens = self.coarse_embedding(coarse_token_ids)
         fine_tokens = self.fine_embedding(fine_token_ids)
 
