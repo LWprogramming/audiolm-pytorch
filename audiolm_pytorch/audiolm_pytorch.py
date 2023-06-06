@@ -847,7 +847,7 @@ class FineTransformer(nn.Module):
         **kwargs
     ):
         super().__init__()
-
+        self.dim = dim
         if audio_text_condition:
             has_condition = True
             cond_dim = default(cond_dim, dim)
@@ -992,7 +992,7 @@ class FineTransformer(nn.Module):
         print(f"coarse embedding characteristics: num_embeddings {self.coarse_embedding.num_embeddings} and embed dim "
               f"{self.coarse_embedding.embedding_dim}. expected {self.num_coarse_quantizers} * {self.codebook_size} = {self.num_coarse_quantizers * self.codebook_size} for first dimension")
         assert self.coarse_embedding.num_embeddings == self.num_coarse_quantizers * self.codebook_size
-        assert self.coarse_embedding.embedding_dim == self.transformer.dim
+        assert self.coarse_embedding.embedding_dim == self.dim
         coarse_tokens = self.coarse_embedding(coarse_token_ids)
         fine_tokens = self.fine_embedding(fine_token_ids)
 
