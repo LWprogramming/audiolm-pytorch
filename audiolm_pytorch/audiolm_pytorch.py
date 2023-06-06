@@ -1879,7 +1879,7 @@ class AudioLM(nn.Module):
         )
         indices = torch.nonzero((coarse_token_ids_or_recon_wave < 0) | (coarse_token_ids_or_recon_wave > 1536), as_tuple=True)
         values = coarse_token_ids_or_recon_wave[indices].tolist()
-        print("Indices:", (tensor.tolist() for tensor in indices))
+        print("Indices:", [tensor.tolist() for tensor in indices])
         print("Values:", values)
         # TODO
         if return_coarse_generated_wave:
