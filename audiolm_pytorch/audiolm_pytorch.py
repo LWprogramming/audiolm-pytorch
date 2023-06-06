@@ -1874,8 +1874,11 @@ class AudioLM(nn.Module):
             semantic_token_ids = semantic_token_ids,
             reconstruct_wave = return_coarse_generated_wave
         )
-        indices = torch.where((coarse_token_ids_or_recon_wave < 0) | (coarse_token_ids_or_recon_wave > 1536))
-        print(indices)
+        indices = torch.nonzero((coarse_token_ids_or_recon_wave < 0) | (coarse_token_ids_or_recon_wave > 1536),
+                                as_tuple=True)
+        values = coarse_token_ids_or_recon_wave[indices].tolist()
+        print("Indices:", indices)
+        print("Values:", values)
         if return_coarse_generated_wave:
             return coarse_token_ids_or_recon_wave
 
