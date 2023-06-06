@@ -350,7 +350,10 @@ class Attention(nn.Module):
         k = k * self.k_scale
 
         # similarities
-
+        print(f"q shape: {q.shape}, k shape: {k.shape}, self.scale: {self.scale}")
+        print(f"expected b to be {b}, h to be {self.heads}, n to be {n}, d to be {self.dim_head}, i to be {n}, j to be {n}")
+        print(f"verify q shape: {q.shape}, does it match {b} {self.heads} {n} {self.dim_head}")
+        print(f"verify k shape: {k.shape}, does it match {b} {n} {self.dim_head}")
         sim = einsum('b h i d, b j d -> b h i j', q, k) * self.scale
 
         if exists(attn_bias):
