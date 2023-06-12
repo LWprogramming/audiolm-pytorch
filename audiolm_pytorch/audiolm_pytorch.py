@@ -1872,6 +1872,9 @@ class AudioLM(nn.Module):
             max_length = max_length
         )
 
+        # I think token ids in general should never be negative. checking this for semantic tokens:
+        assert (semantic_token_ids >= 0).all(), "Semantic token ids should never be negative."
+
         coarse_token_ids_or_recon_wave = self.coarse.generate(
             text_embeds = text_embeds if self.coarse_has_condition else None,
             semantic_token_ids = semantic_token_ids,
