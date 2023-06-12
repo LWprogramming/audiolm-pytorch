@@ -1402,8 +1402,6 @@ class CoarseTransformerWrapper(nn.Module):
 
         init_coarse_time_step = coarse_token_ids.shape[-1]
         sampled_coarse_token_ids = coarse_token_ids.clone()
-        # TODO:inserted here
-        assert torch.all(sampled_coarse_token_ids >= 0), "There are negative values in sampled_coarse_token_ids"
 
         for time_step in tqdm(range(init_coarse_time_step, max_time_steps), desc = 'generating coarse'):
             for ind in range(self.num_coarse_quantizers):
@@ -1425,9 +1423,13 @@ class CoarseTransformerWrapper(nn.Module):
 
                 filtered_logits = top_k(last_coarse_logits, thres = filter_thres)
                 sampled = gumbel_sample(filtered_logits, temperature = temperature, dim = -1)
-
+                assert(torch.all(sampled >= 0)), "There are negative values in sampled but sampled consists of indices of the codebook"
                 sampled = rearrange(sampled, 'b -> b 1')
                 sampled_coarse_token_ids = torch.cat((sampled_coarse_token_ids, sampled), dim = -1)
+        assert torch.all(sampled_coarse_token_ids >= 0), "There are negative values in sampled_coarse_token_ids immediately after all sampling done"
+        index_of_first_eos = torch.nonzero(sampled_coarse_token_ids == self.coarse_eos_id)[0][1].item() # [0] indexes into the first batch, although there should only be 1 element in the batch anyways because we're just training on a single data point for now. The [1] indexes into the time dimension. We expect this first eos token in the batch to occur at the coarsest granularity, i.e. at the end of a quantizer step.
+        # TODO: continue from here. I suspect for some reason the first eos token is not at a multiple of num_coarse_quantizers, i.e. the first eos token is not at the end of a quantizer step. If this is the case, the assertion below with modulo will fail.
+        assert index_of_first_eos % self.num_coarse_quantizers == 0, f"The first eos token is not at a multiple of num_coarse_quantizers. instead found index_of_first_eos = {index_of_first_eos} with num_coarse_quantizers = {self.num_coarse_quantizers}"
 
         sampled_coarse_token_ids = mask_out_after_eos_id(sampled_coarse_token_ids, self.coarse_eos_id, keep_eos = False)
         sampled_coarse_token_ids = rearrange(sampled_coarse_token_ids, 'b (n q) -> b n q', q = self.num_coarse_quantizers)
@@ -1874,12 +1876,18 @@ class AudioLM(nn.Module):
 
         # I think token ids in general should never be negative. checking this for semantic tokens:
         assert (semantic_token_ids >= 0).all(), "Semantic token ids should never be negative."
+        print(f"generated semantic token id shape: {semantic_token_ids.shape}")
+        assert not self.coarse_has_condition, "coarse shouldn't have condition right?"
+        assert not return_coarse_generated_wave, "shouldn't return generated coarse wave right?"
 
         coarse_token_ids_or_recon_wave = self.coarse.generate(
             text_embeds = text_embeds if self.coarse_has_condition else None,
             semantic_token_ids = semantic_token_ids,
             reconstruct_wave = return_coarse_generated_wave
         )
+        print(f"generated coarse token id shape: {coarse_token_ids_or_recon_wave.shape}") # should be (batch_size, num_coarse_tokens, num_coarse_quantizers, )
+        assert coarse_token_ids_or_recon_wave.shape[0] == batch_size, "batch size should be the first dimension"
+        assert coarse_token_ids_or_recon_wave.shape[2] == self.coarse.num_coarse_quantizers, "num coarse quantizers should be the third dimension"
         indices = torch.nonzero((coarse_token_ids_or_recon_wave < 0) | (coarse_token_ids_or_recon_wave > 1536), as_tuple=True)
         values = coarse_token_ids_or_recon_wave[indices].tolist()
         print("Indices:", [tensor.tolist() for tensor in indices])
