@@ -1415,20 +1415,30 @@ class CoarseTransformerWrapper(nn.Module):
                     return_only_coarse_logits = True,
                     **kwargs
                 )
-
+                if time_step == 0:
+                    print(f"on coarse quantizer {ind}, given semantic_token_id shape {semantic_token_ids.shape}, coarse_token_ids.shape {coarse_token_ids.shape}. got coarse_logits.shape: {coarse_logits.shape}")
+                    print(f"I suspect coarse logits shape is batch x codebook size including eos id, where codebook size including eos id is self.transformer.coarse_eos_id + 1. does it match? {self.transformer.coarse_eos_id + 1}")
+                    print(f"coarse_logits[:, -1]: {coarse_logits[:, -1]}")
                 last_coarse_logits = coarse_logits[:, -1]
 
                 if not is_last_step:
                     last_coarse_logits[:, -1] = float('-inf') # prevent from eos if not last quantizer step, but move this to masking logic within the transformer at some point, for both training and eval
 
                 filtered_logits = top_k(last_coarse_logits, thres = filter_thres)
+                if time_step == 0:
+                    print(f"on coarse quantizer {ind}, coarse_logits.shape: {filtered_logits.shape}. I suspect this is batch x 1 because we're picking the top_k, as filter_threshold is {filter_thres}, but maybe i'm misunderstanding the values")
                 sampled = gumbel_sample(filtered_logits, temperature = temperature, dim = -1)
-                assert(torch.all(sampled >= 0)), "There are negative values in sampled but sampled consists of indices of the codebook"
+                if time_step == 0:
+                    print(f"on coarse quantizer {ind}, sampled.shape: {sampled.shape}. I suspect this is batch x 1, 1 single coarse eos id as desired.")
+                # check sampled is nonnegative but also not self.coarse_eos_id, unlike previous just nonnegative check
+                assert(torch.all(sampled >= 0) and torch.all(sampled != self.coarse_eos_id)), "There are negative or eos values in sampled but sampled consists of indices of the codebook"
                 sampled = rearrange(sampled, 'b -> b 1')
                 sampled_coarse_token_ids = torch.cat((sampled_coarse_token_ids, sampled), dim = -1)
         assert torch.all(sampled_coarse_token_ids >= 0), "There are negative values in sampled_coarse_token_ids immediately after all sampling done"
         index_of_first_eos = torch.nonzero(sampled_coarse_token_ids == self.coarse_eos_id)[0][1].item() # [0] indexes into the first batch, although there should only be 1 element in the batch anyways because we're just training on a single data point for now. The [1] indexes into the time dimension. We expect this first eos token in the batch to occur at the coarsest granularity, i.e. at the end of a quantizer step.
         # TODO: continue from here. I suspect for some reason the first eos token is not at a multiple of num_coarse_quantizers, i.e. the first eos token is not at the end of a quantizer step. If this is the case, the assertion below with modulo will fail.
+        # This assertion did, in fact, fail. I suspect the code causing the premature eos being inserted is in
+        # BEGIN COPILOT SUGGESTION: the transformer, where we set the last token to be eos if we're not at the last quantizer step. This is a hacky way to prevent the model from generating more tokens after the first eos token, but it's not a good way to do it because it's not consistent with the training procedure, where we don't do this. Instead, we should mask out the logits of the eos token in the transformer, and then sample from the logits. This will prevent the model from generating more tokens after the first eos token, but it will also allow the model to generate the eos token at the end of a quantizer step, which is what we want.
         assert index_of_first_eos % self.num_coarse_quantizers == 0, f"The first eos token is not at a multiple of num_coarse_quantizers. instead found index_of_first_eos = {index_of_first_eos} with num_coarse_quantizers = {self.num_coarse_quantizers}"
 
         sampled_coarse_token_ids = mask_out_after_eos_id(sampled_coarse_token_ids, self.coarse_eos_id, keep_eos = False)
