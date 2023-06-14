@@ -1463,7 +1463,10 @@ class CoarseTransformerWrapper(nn.Module):
         # BEGIN COPILOT SUGGESTION: the transformer, where we set the last token to be eos if we're not at the last quantizer step. This is a hacky way to prevent the model from generating more tokens after the first eos token, but it's not a good way to do it because it's not consistent with the training procedure, where we don't do this. Instead, we should mask out the logits of the eos token in the transformer, and then sample from the logits. This will prevent the model from generating more tokens after the first eos token, but it will also allow the model to generate the eos token at the end of a quantizer step, which is what we want.
         assert index_of_first_eos % self.num_coarse_quantizers == 0, f"The first eos token is not at a multiple of num_coarse_quantizers. instead found index_of_first_eos = {index_of_first_eos} with num_coarse_quantizers = {self.num_coarse_quantizers}"
 
+        print(f"checking if sampled_coarse_token_ids has eos, and if so, what index it is. this isn't a big deal at this stage because we're about to mask things out anyways: {torch.nonzero(sampled_coarse_token_ids == self.coarse_eos_id)}")
         sampled_coarse_token_ids = mask_out_after_eos_id(sampled_coarse_token_ids, self.coarse_eos_id, keep_eos = False)
+        print(f"expecting to have removed all eos ids from sampled_coarse_token_ids")
+        assert torch.all(sampled_coarse_token_ids != self.coarse_eos_id), "There are eos values in sampled_coarse_token_ids but sampled_coarse_token_ids consists of indices of the codebook"
         sampled_coarse_token_ids = rearrange(sampled_coarse_token_ids, 'b (n q) -> b n q', q = self.num_coarse_quantizers)
 
         if not reconstruct_wave:
