@@ -1403,6 +1403,7 @@ class CoarseTransformerWrapper(nn.Module):
         init_coarse_time_step = coarse_token_ids.shape[-1]
         sampled_coarse_token_ids = coarse_token_ids.clone()
 
+        print(f"init_coarse_time_step {init_coarse_time_step}, max_time_steps {max_time_steps}")
         for time_step in tqdm(range(init_coarse_time_step, max_time_steps), desc = 'generating coarse'):
             for ind in range(self.num_coarse_quantizers):
                 is_last_step = ind == (self.num_coarse_quantizers - 1)
@@ -1415,7 +1416,7 @@ class CoarseTransformerWrapper(nn.Module):
                     return_only_coarse_logits = True,
                     **kwargs
                 )
-                if time_step == 0:
+                if time_step == init_coarse_time_step:
                     print(f"on coarse quantizer {ind}, given semantic_token_id shape {semantic_token_ids.shape}, coarse_token_ids.shape {coarse_token_ids.shape}. got coarse_logits.shape: {coarse_logits.shape}")
                     print(f"I suspect coarse logits shape is batch x codebook size including eos id, where codebook size including eos id is self.transformer.coarse_eos_id + 1. does it match? {self.transformer.coarse_eos_id + 1}")
                     print(f"coarse_logits[:, -1]: {coarse_logits[:, -1]}")
@@ -1425,13 +1426,14 @@ class CoarseTransformerWrapper(nn.Module):
                     last_coarse_logits[:, -1] = float('-inf') # prevent from eos if not last quantizer step, but move this to masking logic within the transformer at some point, for both training and eval
 
                 filtered_logits = top_k(last_coarse_logits, thres = filter_thres)
-                if time_step == 0:
+                if time_step == init_coarse_time_step:
                     print(f"on coarse quantizer {ind}, coarse_logits.shape: {filtered_logits.shape}. I suspect this is batch x 1 because we're picking the top_k, as filter_threshold is {filter_thres}, but maybe i'm misunderstanding the values")
                 sampled = gumbel_sample(filtered_logits, temperature = temperature, dim = -1)
-                if time_step == 0:
+                if time_step == init_coarse_time_step:
                     print(f"on coarse quantizer {ind}, sampled.shape: {sampled.shape}. I suspect this is batch x 1, 1 single coarse eos id as desired.")
                 # check sampled is nonnegative but also not self.coarse_eos_id, unlike previous just nonnegative check
-                assert(torch.all(sampled >= 0) and torch.all(sampled != self.coarse_eos_id)), "There are negative or eos values in sampled but sampled consists of indices of the codebook"
+                assert (torch.all(sampled >= 0)), "There are negative values in sampled but sampled consists of indices of the codebook"
+                assert (torch.all(sampled != self.coarse_eos_id)), "There are eos values in sampled but sampled consists of indices of the codebook"
                 sampled = rearrange(sampled, 'b -> b 1')
                 sampled_coarse_token_ids = torch.cat((sampled_coarse_token_ids, sampled), dim = -1)
         assert torch.all(sampled_coarse_token_ids >= 0), "There are negative values in sampled_coarse_token_ids immediately after all sampling done"
