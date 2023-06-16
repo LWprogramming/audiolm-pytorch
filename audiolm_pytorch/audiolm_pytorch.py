@@ -335,18 +335,7 @@ class Attention(nn.Module):
 
         q = rearrange(q, 'b n (h d) -> b h n d', h = self.heads)
 
-        # new technique, rmsnormed queries and keys, first used by 22B parameter model successfully https://arxiv.org/abs/2302.05442
-
-        q, k = map(l2norm, (q, k))
-        q = q * self.q_scale
-        k = k * self.k_scale
-
-        # similarities
-        sim = einsum('b h i d, b j d -> b h i j', q, k) * self.scale
-
-        if exists(attn_bias):
-            attn_bias = F.pad(attn_bias, (self.num_null_kv, 0), value = 0.)
-            sim = sim + attn_bias
+        # handle mask and null key / value
 
         if exists(mask):
             mask = F.pad(mask, (self.num_null_kv, 0), value = True)
