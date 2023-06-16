@@ -996,25 +996,15 @@ class FineTransformer(nn.Module):
         fine_offsets = fine_offsets[:fine_length]
         fine_token_ids = fine_token_ids + rearrange(fine_offsets, '... -> 1 ...') * self.codebook_size
 
-        # TODO: cuda failed on coarse embedding. continue from here, printing out what the problem is
-        print("coarse_token_ids.shape", coarse_token_ids.shape)
-        # num_embeddings: int
-        # embedding_dim: int
-        # padding_idx: Optional[int]
-        # max_norm: Optional[float]
-        # norm_type: float
-        # scale_grad_by_freq: bool
-        # weight: Tensor
-        # sparse: bool
-        # embedding fields ^
-        # = nn.Embedding(num_coarse_quantizers * codebook_size, dim)
-        print(f"coarse embedding characteristics: num_embeddings {self.coarse_embedding.num_embeddings} and embed dim "
-              f"{self.coarse_embedding.embedding_dim}. expected {self.num_coarse_quantizers} * {self.codebook_size} = {self.num_coarse_quantizers * self.codebook_size} for first dimension")
+        # torch.Size([1, 1536]) where 1536 is sequence_length * num_coarse_quantizers, in this case 512 * 3.
+        # print("coarse_token_ids.shape", coarse_token_ids.shape)
+
+        # num embeddings = num_coarse_quantizers * codebook_size, in this case 3 * 1024 = 3072. embed dim is 512.
+        # print(f"coarse embedding characteristics: num_embeddings {self.coarse_embedding.num_embeddings} and embed dim "
+        #       f"{self.coarse_embedding.embedding_dim}. expected {self.num_coarse_quantizers} * {self.codebook_size} = {self.num_coarse_quantizers * self.codebook_size} for first dimension")
         assert self.coarse_embedding.num_embeddings == self.num_coarse_quantizers * self.codebook_size
         assert self.coarse_embedding.embedding_dim == self.dim
-        print(f"coarse_token_ids dump: {coarse_token_ids}")
         coarse_tokens = self.coarse_embedding(coarse_token_ids)
-        print("finished coarse embedding")
         fine_tokens = self.fine_embedding(fine_token_ids)
 
         coarse_quantize_tokens = repeat(self.coarse_quantize_embedding.weight, 'q d -> (n q) d', n = ceil_div(coarse_token_ids.shape[-1], self.num_coarse_quantizers))
@@ -1449,7 +1439,7 @@ class CoarseTransformerWrapper(nn.Module):
                 # filtered logits shape: batch x number_of_remaining_logits after filtering with top_k
                 filtered_logits = top_k(last_coarse_logits, thres = filter_thres)
                 # if time_step == init_coarse_time_step:
-                #     print(f"on coarse quantizer {ind}, coarse_logits.shape: {filtered_logits.shape}. I suspect this is batch x 1 because we're picking the top_k, as filter_threshold is {filter_thres}, but maybe i'm misunderstanding the values")
+                #     print(f"on coarse quantizer {ind}, coarse_logits.shape: {filtered_logits.shape}.")
 
                 # sampled shape is (batch,). A single-dimension tensor of indices of the codebook for each element in batch
                 sampled = gumbel_sample(filtered_logits, temperature = temperature, dim = -1)
