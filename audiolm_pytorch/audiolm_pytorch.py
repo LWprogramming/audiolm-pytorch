@@ -832,7 +832,7 @@ class FineTransformer(nn.Module):
         **kwargs
     ):
         super().__init__()
-        self.dim = dim
+        # self.dim = dim
         rel_pos_bias = rel_pos_bias and not flash_attn
 
         if audio_text_condition:
@@ -990,8 +990,8 @@ class FineTransformer(nn.Module):
         # num embeddings = num_coarse_quantizers * codebook_size, in this case 3 * 1024 = 3072. embed dim is 512.
         # print(f"coarse embedding characteristics: num_embeddings {self.coarse_embedding.num_embeddings} and embed dim "
         #       f"{self.coarse_embedding.embedding_dim}. expected {self.num_coarse_quantizers} * {self.codebook_size} = {self.num_coarse_quantizers * self.codebook_size} for first dimension")
-        assert self.coarse_embedding.num_embeddings == self.num_coarse_quantizers * self.codebook_size
-        assert self.coarse_embedding.embedding_dim == self.dim
+        # assert self.coarse_embedding.num_embeddings == self.num_coarse_quantizers * self.codebook_size
+        # assert self.coarse_embedding.embedding_dim == self.dim
         coarse_tokens = self.coarse_embedding(coarse_token_ids)
         fine_tokens = self.fine_embedding(fine_token_ids)
 
@@ -1404,7 +1404,7 @@ class CoarseTransformerWrapper(nn.Module):
         init_coarse_time_step = coarse_token_ids.shape[-1]
         sampled_coarse_token_ids = coarse_token_ids.clone()
 
-        print(f"init_coarse_time_step {init_coarse_time_step}, max_time_steps {max_time_steps}")
+        # print(f"init_coarse_time_step {init_coarse_time_step}, max_time_steps {max_time_steps}")
         for time_step in tqdm(range(init_coarse_time_step, max_time_steps), desc = 'generating coarse'):
             for ind in range(self.num_coarse_quantizers):
                 just_finished_quantizer_step = (ind == 0 and time_step > 0)
