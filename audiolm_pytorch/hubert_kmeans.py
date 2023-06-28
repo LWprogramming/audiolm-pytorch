@@ -74,6 +74,11 @@ class HubertWithKmeans(nn.Module):
     def codebook_size(self):
         return self.kmeans.n_clusters
 
+    @property
+    def downsample_factor(self):
+        # todo: double check
+        return 320
+
     @torch.no_grad()
     def forward(
         self,
@@ -141,9 +146,13 @@ class HubertWithKmeans(nn.Module):
         codebook_indices = self.kmeans.predict(embed.cpu().detach().numpy())
 
         codebook_indices = torch.from_numpy(codebook_indices).to(device).long()
+
         # print(f"codebook_indices before unpacking: {codebook_indices.shape}") # [31]
-        if flatten:
-            return codebook_indices
         codebook_indices, = unpack(codebook_indices, packed_shape, '*')
         # print(f"codebook_indices after unpacking: {codebook_indices.shape}") # [1, 31]
-        return codebook_indices
+
+        if flatten:
+            return codebook_indices
+
+        return rearrange(codebook_indices, 'b ... -> b (...)')
+
