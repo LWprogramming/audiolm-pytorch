@@ -92,7 +92,7 @@ class EncodecWrapper(nn.Module):
         # of shape [batch, num_quantizers, num_samples_per_frame]. We want to concatenate the frames to get all the
         # timesteps concatenated.
         codes = torch.cat([encoded[0] for encoded in encoded_frames], dim=-1)  # [batch, num_quantizers, timesteps]
-        print(f"from encodec.py after torch.cat: codes.shape: {codes.shape}")
+        # print(f"from encodec.py after torch.cat: codes.shape: {codes.shape}")
         some_smallish_number_still_more_than_a_reasonable_number_of_quantizers = 20
         assert codes.shape[1] <= some_smallish_number_still_more_than_a_reasonable_number_of_quantizers, codes.shape
         # transformer code that uses codec expects codes to be [batch, timesteps, num_quantizers]
@@ -108,7 +108,7 @@ class EncodecWrapper(nn.Module):
             emb, = unpack(emb, ps, '* n c')
 
         codes, = unpack(codes, ps, '* n q')
-        print(f"from encodec.py unpacked codes.shape: {codes.shape}")
+        # print(f"from encodec.py unpacked codes.shape: {codes.shape}")
         return emb, codes, None
 
     def decode_from_codebook_indices(self, quantized_indices):
