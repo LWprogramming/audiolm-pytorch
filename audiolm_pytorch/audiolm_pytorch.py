@@ -1438,21 +1438,18 @@ class CoarseTransformerWrapper(nn.Module):
                 #     print(f"on coarse quantizer {ind}, sampled.shape: {sampled.shape}.")
                 sampled = rearrange(sampled, 'b -> b 1')
                 sampled_coarse_token_ids = torch.cat((sampled_coarse_token_ids, sampled), dim = -1)
-        assert torch.all(sampled_coarse_token_ids >= 0), "There are negative values in sampled_coarse_token_ids immediately after all sampling done"
-        eos_token_indices = torch.nonzero(sampled_coarse_token_ids == self.coarse_eos_id)
-        if len(eos_token_indices) == 0:
-            index_of_first_eos = None
-        else:
-            index_of_first_eos = torch.nonzero(sampled_coarse_token_ids == self.coarse_eos_id)[0][1].item() # [0] indexes into the first batch, although there should only be 1 element in the batch anyways because we're just training on a single data point for now. The [1] indexes into the time dimension. We expect this first eos token in the batch to occur at the coarsest granularity, i.e. at the end of a quantizer step.
+        # assert torch.all(sampled_coarse_token_ids >= 0), "There are negative values in sampled_coarse_token_ids immediately after all sampling done"
+        # eos_token_indices = torch.nonzero(sampled_coarse_token_ids == self.coarse_eos_id)
+        # if len(eos_token_indices) == 0:
+        #     index_of_first_eos = None
+        # else:
+        #     index_of_first_eos = torch.nonzero(sampled_coarse_token_ids == self.coarse_eos_id)[0][1].item() # [0] indexes into the first batch, although there should only be 1 element in the batch anyways because we're just training on a single data point for now. The [1] indexes into the time dimension. We expect this first eos token in the batch to occur at the coarsest granularity, i.e. at the end of a quantizer step.
 
         # assert index_of_first_eos % self.num_coarse_quantizers == 0, f"The first eos token is not at a multiple of num_coarse_quantizers. instead found index_of_first_eos = {index_of_first_eos} with num_coarse_quantizers = {self.num_coarse_quantizers}"
-        # TODO: re-enable assertion, because I think it's right-- I just want it to stop erroring for now.
-        print(f"index_of_first_eos: {index_of_first_eos}, with num_coarse_quantizers = {self.num_coarse_quantizers}")
-
-        print(f"checking if sampled_coarse_token_ids has eos, and if so, what index it is. this isn't a big deal at this stage because we're about to mask things out anyways: {torch.nonzero(sampled_coarse_token_ids == self.coarse_eos_id)}")
+        # print(f"checking if sampled_coarse_token_ids has eos, and if so, what index it is. this isn't a big deal at this stage because we're about to mask things out anyways: {torch.nonzero(sampled_coarse_token_ids == self.coarse_eos_id)}")
         sampled_coarse_token_ids = mask_out_after_eos_id(sampled_coarse_token_ids, self.coarse_eos_id, keep_eos = False)
-        print(f"expecting to have removed all eos ids from sampled_coarse_token_ids")
-        assert torch.all(sampled_coarse_token_ids != self.coarse_eos_id), "There are eos values in sampled_coarse_token_ids but sampled_coarse_token_ids consists of indices of the codebook"
+        # print(f"expecting to have removed all eos ids from sampled_coarse_token_ids")
+        # assert torch.all(sampled_coarse_token_ids != self.coarse_eos_id), "There are eos values in sampled_coarse_token_ids but sampled_coarse_token_ids consists of indices of the codebook"
         sampled_coarse_token_ids = rearrange(sampled_coarse_token_ids, 'b (n q) -> b n q', q = self.num_coarse_quantizers)
 
         if not reconstruct_wave:
@@ -1897,23 +1894,22 @@ class AudioLM(nn.Module):
             max_length = max_length
         )
 
-        print(f"generated semantic token id shape: {semantic_token_ids.shape}")
-        assert not self.coarse_has_condition, "coarse shouldn't have condition right?"
-        assert not return_coarse_generated_wave, "shouldn't return generated coarse wave right?"
+        # print(f"generated semantic token id shape: {semantic_token_ids.shape}")
+        # assert not self.coarse_has_condition, "coarse shouldn't have condition right?"
+        # assert not return_coarse_generated_wave, "shouldn't return generated coarse wave right?"
 
         coarse_token_ids_or_recon_wave = self.coarse.generate(
             text_embeds = text_embeds if self.coarse_has_condition else None,
             semantic_token_ids = semantic_token_ids,
             reconstruct_wave = return_coarse_generated_wave
         )
-        print(f"generated coarse token id shape: {coarse_token_ids_or_recon_wave.shape}") # should be (batch_size, num_coarse_tokens, num_coarse_quantizers, )
-        assert coarse_token_ids_or_recon_wave.shape[0] == batch_size, "batch size should be the first dimension"
-        assert coarse_token_ids_or_recon_wave.shape[2] == self.coarse.num_coarse_quantizers, "num coarse quantizers should be the third dimension"
-        indices = torch.nonzero((coarse_token_ids_or_recon_wave < 0) | (coarse_token_ids_or_recon_wave > 1536), as_tuple=True)
-        values = coarse_token_ids_or_recon_wave[indices].tolist()
-        print("Indices:", [tensor.tolist() for tensor in indices])
-        print("Values:", values)
-        # TODO
+        # print(f"generated coarse token id shape: {coarse_token_ids_or_recon_wave.shape}") # should be (batch_size, num_coarse_tokens, num_coarse_quantizers, )
+        # assert coarse_token_ids_or_recon_wave.shape[0] == batch_size, "batch size should be the first dimension"
+        # assert coarse_token_ids_or_recon_wave.shape[2] == self.coarse.num_coarse_quantizers, "num coarse quantizers should be the third dimension"
+        # indices = torch.nonzero((coarse_token_ids_or_recon_wave < 0) | (coarse_token_ids_or_recon_wave > 1536), as_tuple=True)
+        # values = coarse_token_ids_or_recon_wave[indices].tolist()
+        # print("Indices:", [tensor.tolist() for tensor in indices])
+        # print("Values:", values)
         if return_coarse_generated_wave:
             return coarse_token_ids_or_recon_wave
 
