@@ -753,7 +753,7 @@ class SemanticTransformerTrainer(nn.Module):
 
         # log
 
-        self.print(f"{steps}: loss: {logs['loss']}")
+        self.print(f"semantic {steps}: loss: {logs['loss']}")
         self.accelerator.log({"train_loss": logs['loss']}, step=steps)
 
         # sample results every so often
@@ -765,7 +765,7 @@ class SemanticTransformerTrainer(nn.Module):
                 self.train_wrapper.eval()
                 valid_loss = self.train_wrapper(**data_kwargs, return_loss = True)
 
-            self.print(f'{steps}: valid loss {valid_loss}')
+            self.print(f'semantic {steps}: valid loss {valid_loss}')
             self.accelerator.log({"valid_loss": valid_loss}, step=steps)
 
         # save model every so often
@@ -774,7 +774,7 @@ class SemanticTransformerTrainer(nn.Module):
             model_path = str(self.results_folder / f'semantic.transformer.{steps}.pt')
             self.save(model_path)
 
-            self.print(f'{steps}: saving model to {str(self.results_folder)}')
+            self.print(f'semantic {steps}: saving model to {str(self.results_folder)}')
 
         self.steps += 1
         return logs
@@ -1008,7 +1008,7 @@ class CoarseTransformerTrainer(nn.Module):
 
         # log
 
-        self.print(f"{steps}: loss: {logs['loss']}")
+        self.print(f"coarse {steps}: loss: {logs['loss']}")
         self.accelerator.log({"train_loss": logs['loss']}, step=steps)
 
         # sample results every so often
@@ -1024,7 +1024,7 @@ class CoarseTransformerTrainer(nn.Module):
                     return_loss = True
                 )
 
-            self.print(f'{steps}: valid loss {valid_loss}')
+            self.print(f'coarse {steps}: valid loss {valid_loss}')
             self.accelerator.log({"valid_loss": valid_loss}, step=steps)
 
         # save model every so often
@@ -1265,7 +1265,7 @@ class FineTransformerTrainer(nn.Module):
 
         # log
 
-        self.print(f"{steps}: loss: {logs['loss']}")
+        self.print(f"fine {steps}: loss: {logs['loss']}")
         self.accelerator.log({"train_loss": logs['loss']}, step=steps)
 
         # sample results every so often
@@ -1277,7 +1277,7 @@ class FineTransformerTrainer(nn.Module):
                 self.train_wrapper.eval()
                 valid_loss = self.train_wrapper(**data_kwargs, return_loss = True)
 
-            self.print(f'{steps}: valid loss {valid_loss}')
+            self.print(f'fine {steps}: valid loss {valid_loss}')
             self.accelerator.log({"valid_loss": valid_loss}, step=steps)
 
         # save model every so often
@@ -1286,7 +1286,7 @@ class FineTransformerTrainer(nn.Module):
             model_path = str(self.results_folder / f'fine.transformer.{steps}.pt')
             self.save(model_path)
 
-            self.print(f'{steps}: saving model to {str(self.results_folder)}')
+            self.print(f'fine {steps}: saving model to {str(self.results_folder)}')
 
         self.steps += 1
         return logs
