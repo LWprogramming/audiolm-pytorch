@@ -1033,7 +1033,7 @@ class CoarseTransformerTrainer(nn.Module):
             model_path = str(self.results_folder / f'coarse.transformer.{steps}.pt')
             self.save(model_path)
 
-            self.print(f'{steps}: saving model to {str(self.results_folder)}')
+            self.print(f'coarse {steps}: saving model to {str(self.results_folder)}')
 
         self.steps += 1
         return logs
