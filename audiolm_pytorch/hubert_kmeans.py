@@ -1,8 +1,8 @@
 from pathlib import Path
 
 import torch
-from torch import nn
-from einops import rearrange, pack, unpack
+from torch import nn, einsum
+from einops import rearrange, repeat, pack, unpack
 
 import joblib
 
@@ -64,7 +64,13 @@ class HubertWithKmeans(nn.Module):
         self.model.eval()
 
         kmeans = joblib.load(kmeans_path)
+
         self.kmeans = kmeans
+
+        self.register_buffer(
+            'cluster_centers',
+            torch.from_numpy(kmeans.cluster_centers_)
+        )
 
     @property
     def groups(self):
@@ -79,16 +85,16 @@ class HubertWithKmeans(nn.Module):
         # todo: double check
         return 320
 
-    @torch.no_grad()
+    @torch.inference_mode()
     def forward(
         self,
         wav_input,
         flatten = True,
         input_sample_hz = None
     ):
-        device = wav_input.device
         # on cuda, 1 x length defined in semantic/coarse transformer
         # print(f"wav input shape before processing: {wav_input.shape} and device: {wav_input.device}")
+        batch, device = wav_input.shape[0], wav_input.device
 
         if exists(input_sample_hz):
             wav_input = resample(wav_input, input_sample_hz, self.target_sample_hz)
@@ -132,27 +138,13 @@ class HubertWithKmeans(nn.Module):
                 features_only=True,
                 mask=False,  # thanks to @maitycyrus for noticing that mask is defaulted to True in the fairseq code
                 output_layer=self.output_layer
-            )
-            # print(f"embed.keys(): {embed.keys()}")
-            # padding_mask is also a key but it's None
-            # print(f"type(wav_input) {type(wav_input)} and shape: {wav_input.shape}") # 1 x 10240 in the example, dependent on max_length or whatever that parameter is
-            # print(f"embed['x'] shape: {embed['x'].shape}, embed['features'].shape: {embed['features'].shape}") # 1 x 31 x 768 for both.
-            # this is the number of tokens-- derived via 16 KHz sampling to 50 Hz tokens -> 320x reduction, so
-            # 10240 / 320 = 32 rounds down to 31.
-            embed, packed_shape = pack([embed['x']], '* d')
-        # wav_input shape: torch.Size([1, 10240]), embed shape: torch.Size([31, 768]), packed_shape: [torch.Size([1, 31])]
-        # print(f"self.use_mert: {self.use_mert}, wav_input shape: {wav_input.shape}, embed shape: {embed.shape}, packed_shape: {packed_shape}")
+            )['x']
 
-        codebook_indices = self.kmeans.predict(embed.cpu().detach().numpy())
-
-        codebook_indices = torch.from_numpy(codebook_indices).to(device).long()
-
-        # print(f"codebook_indices before unpacking: {codebook_indices.shape}") # [31]
-        codebook_indices, = unpack(codebook_indices, packed_shape, '*')
-        # print(f"codebook_indices after unpacking: {codebook_indices.shape}") # [1, 31]
+            batched_cluster_centers = repeat(self.cluster_centers, 'c d -> b c d', b=embed.shape[0])
+            dists = -torch.cdist(embed, batched_cluster_centers, p=2)
+            clusters = dists.argmax(dim=-1)
 
         if flatten:
-            return codebook_indices
+            return clusters
 
-        return rearrange(codebook_indices, 'b ... -> b (...)')
-
+        return rearrange(clusters, 'b ... -> b (...)')

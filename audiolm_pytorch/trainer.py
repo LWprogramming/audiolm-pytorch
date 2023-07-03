@@ -508,7 +508,7 @@ class SoundStreamTrainer(nn.Module):
             for model, label in models:
                 model.eval()
 
-                with torch.no_grad():
+                with torch.inference_mode():
                     recons = model(wave, return_recons_only = True)
 
                 for ind, recon in enumerate(recons.unbind(dim = 0)):
@@ -761,7 +761,7 @@ class SemanticTransformerTrainer(nn.Module):
         if self.is_main and not (steps % self.save_results_every):
             data_kwargs = self.data_tuple_to_kwargs(next(self.valid_dl_iter))
 
-            with torch.no_grad():
+            with torch.inference_mode():
                 self.train_wrapper.eval()
                 valid_loss = self.train_wrapper(**data_kwargs, return_loss = True)
 
@@ -1016,7 +1016,7 @@ class CoarseTransformerTrainer(nn.Module):
         if self.is_main and not (steps % self.save_results_every):
             data_kwargs = dict(zip(self.ds_fields, next(self.valid_dl_iter)))
 
-            with torch.no_grad():
+            with torch.inference_mode():
                 self.train_wrapper.eval()
 
                 valid_loss = self.train_wrapper(
@@ -1273,7 +1273,7 @@ class FineTransformerTrainer(nn.Module):
         if self.is_main and not (steps % self.save_results_every):
             data_kwargs = self.data_tuple_to_kwargs(next(self.valid_dl_iter))
 
-            with torch.no_grad():
+            with torch.inference_mode():
                 self.train_wrapper.eval()
                 valid_loss = self.train_wrapper(**data_kwargs, return_loss = True)
 
