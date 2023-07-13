@@ -567,7 +567,9 @@ class SemanticTransformerTrainer(nn.Module):
         force_clear_prev_results = None
     ):
         super().__init__()
-        self.accelerator = Accelerator(**accelerate_kwargs)
+        kwargs = DistributedDataParallelKwargs(find_unused_parameters = True)
+        self.accelerator = Accelerator(kwargs_handlers = [kwargs], **accelerate_kwargs)
+        # self.accelerator = Accelerator(**accelerate_kwargs)
 
         self.wav2vec = wav2vec
         self.transformer = transformer
@@ -818,7 +820,9 @@ class CoarseTransformerTrainer(nn.Module):
         force_clear_prev_results = None
     ):
         super().__init__()
-        self.accelerator = Accelerator(**accelerate_kwargs)
+        kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
+        self.accelerator = Accelerator(kwargs_handlers=[kwargs], **accelerate_kwargs)
+        # self.accelerator = Accelerator(**accelerate_kwargs)
 
         self.transformer = transformer
         self.codec = codec
@@ -1076,7 +1080,9 @@ class FineTransformerTrainer(nn.Module):
         force_clear_prev_results = None
     ):
         super().__init__()
-        self.accelerator = Accelerator(**accelerate_kwargs)
+        kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
+        self.accelerator = Accelerator(kwargs_handlers=[kwargs], **accelerate_kwargs)
+        # self.accelerator = Accelerator(**accelerate_kwargs)
 
         self.transformer = transformer
         self.codec = codec
