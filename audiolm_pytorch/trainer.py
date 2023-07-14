@@ -760,7 +760,7 @@ class SemanticTransformerTrainer(nn.Module):
 
         # log
 
-        self.print(f"semantic {steps}: loss: {logs['loss']}")
+        self.print(f"device {self.device} semantic {steps}: loss: {logs['loss']}")
         self.accelerator.log({"train_loss": logs['loss']}, step=steps)
 
         # sample results every so often
