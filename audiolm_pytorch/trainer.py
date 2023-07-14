@@ -170,6 +170,8 @@ class SoundStreamTrainer(nn.Module):
         else:
             kwargs = DistributedDataParallelKwargs(find_unused_parameters = True)
             self.accelerator = Accelerator(kwargs_handlers = [kwargs], **accelerate_kwargs)
+        # Scale learning rate linearly with number of processes. E.g., 4 GPUs -> lr * 4.
+        scaled_learn_rate = lr * self.accelerator.num_processes
 
         self.soundstream = soundstream
 
@@ -187,19 +189,19 @@ class SoundStreamTrainer(nn.Module):
             "num_train_steps": num_train_steps,
             "batch_size": batch_size,
             "gradient_accum_every": grad_accum_every,
-            "learning_rate": lr,
+            "learning_rate": scaled_learn_rate,
             "target_sample_hz": soundstream.target_sample_hz,
         }
 
         # optimizers
 
-        self.optim = get_optimizer(soundstream.non_discr_parameters(), lr = lr, wd = wd)
+        self.optim = get_optimizer(soundstream.non_discr_parameters(), lr = scaled_learn_rate, wd = wd)
 
         for discr_optimizer_key, discr in self.multiscale_discriminator_iter():
-            one_multiscale_discr_optimizer = get_optimizer(discr.parameters(), lr = lr, wd = wd)
+            one_multiscale_discr_optimizer = get_optimizer(discr.parameters(), lr = scaled_learn_rate, wd = wd)
             setattr(self, discr_optimizer_key, one_multiscale_discr_optimizer)
 
-        self.discr_optim = get_optimizer(soundstream.stft_discriminator.parameters(), lr = lr, wd = wd, use_lion = use_lion)
+        self.discr_optim = get_optimizer(soundstream.stft_discriminator.parameters(), lr = scaled_learn_rate, wd = wd, use_lion = use_lion)
 
         # max grad norm
 
@@ -567,9 +569,12 @@ class SemanticTransformerTrainer(nn.Module):
         force_clear_prev_results = None
     ):
         super().__init__()
+
         kwargs = DistributedDataParallelKwargs(find_unused_parameters = True)
         self.accelerator = Accelerator(kwargs_handlers = [kwargs], **accelerate_kwargs)
         # self.accelerator = Accelerator(**accelerate_kwargs)
+        # Scale learning rate linearly with number of processes. E.g., 4 GPUs -> lr * 4.
+        scaled_learn_rate = lr * self.accelerator.num_processes
 
         self.wav2vec = wav2vec
         self.transformer = transformer
@@ -589,7 +594,7 @@ class SemanticTransformerTrainer(nn.Module):
 
         # optimizers
 
-        self.optim = get_optimizer(transformer.parameters(), lr = lr, wd = wd)
+        self.optim = get_optimizer(transformer.parameters(), lr = scaled_learn_rate, wd = wd)
 
         # max grad norm
 
@@ -661,7 +666,7 @@ class SemanticTransformerTrainer(nn.Module):
 
         self.results_folder.mkdir(parents = True, exist_ok = True)
         
-        hps = {"num_train_steps": num_train_steps, "data_max_length": data_max_length, "learning_rate": lr}
+        hps = {"num_train_steps": num_train_steps, "data_max_length": data_max_length, "learning_rate": scaled_learn_rate}
         self.accelerator.init_trackers("semantic", config=hps)
 
     def save(self, path):
@@ -823,6 +828,8 @@ class CoarseTransformerTrainer(nn.Module):
         kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
         self.accelerator = Accelerator(kwargs_handlers=[kwargs], **accelerate_kwargs)
         # self.accelerator = Accelerator(**accelerate_kwargs)
+        # Scale learning rate linearly with number of processes. E.g., 4 GPUs -> lr * 4.
+        scaled_learn_rate = lr * self.accelerator.num_processes
 
         self.transformer = transformer
         self.codec = codec
@@ -844,7 +851,7 @@ class CoarseTransformerTrainer(nn.Module):
 
         # optimizers
 
-        self.optim = get_optimizer(transformer.parameters(), lr = lr, wd = wd)
+        self.optim = get_optimizer(transformer.parameters(), lr = scaled_learn_rate, wd = wd)
 
         # max grad norm
 
@@ -920,7 +927,7 @@ class CoarseTransformerTrainer(nn.Module):
 
         self.results_folder.mkdir(parents = True, exist_ok = True)
 
-        hps = {"num_train_steps": num_train_steps, "data_max_length": data_max_length, "learning_rate": lr}
+        hps = {"num_train_steps": num_train_steps, "data_max_length": data_max_length, "learning_rate": scaled_learn_rate}
         self.accelerator.init_trackers("coarse", config=hps)
 
         self.train_wrapper.to(self.device)
@@ -1083,6 +1090,8 @@ class FineTransformerTrainer(nn.Module):
         kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
         self.accelerator = Accelerator(kwargs_handlers=[kwargs], **accelerate_kwargs)
         # self.accelerator = Accelerator(**accelerate_kwargs)
+        # Scale learning rate linearly with number of processes. E.g., 4 GPUs -> lr * 4.
+        scaled_learn_rate = lr * self.accelerator.num_processes
 
         self.transformer = transformer
         self.codec = codec
@@ -1102,7 +1111,7 @@ class FineTransformerTrainer(nn.Module):
 
         # optimizers
 
-        self.optim = get_optimizer(transformer.parameters(), lr = lr, wd = wd)
+        self.optim = get_optimizer(transformer.parameters(), lr = scaled_learn_rate, wd = wd)
 
         # max grad norm
 
@@ -1175,7 +1184,7 @@ class FineTransformerTrainer(nn.Module):
 
         self.results_folder.mkdir(parents = True, exist_ok = True)
 
-        hps = {"num_train_steps": num_train_steps, "data_max_length": data_max_length, "learning_rate": lr}
+        hps = {"num_train_steps": num_train_steps, "data_max_length": data_max_length, "learning_rate": scaled_learn_rate}
         self.accelerator.init_trackers("fine", config=hps)
 
         self.train_wrapper.to(self.device)
