@@ -740,7 +740,7 @@ class SemanticTransformerTrainer(nn.Module):
             data_kwargs = self.data_tuple_to_kwargs(next(self.dl_iter))
             if self.steps == 0 and _ == 0:
                 # write the audio to file named something like out-{datetime}.wav to double-check the data is correct
-                output_path = str(self.results_folder / f'semantic-input-data-{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.wav')
+                output_path = str(self.results_folder / f'device-{self.device}-semantic-input-data-{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.wav')
                 generated_wav = data_kwargs['raw_wave']
                 print(f"from device {self.device}: semantic generated_wav.shape = {generated_wav.shape}")
                 # generated_wav is batch x time -> just save generated_wav[0], which needs to be a 1 x time
@@ -997,7 +997,7 @@ class CoarseTransformerTrainer(nn.Module):
             data_kwargs = dict(zip(self.ds_fields, next(self.dl_iter)))
             if self.steps == 0 and _ == 0:
                 # write the audio to file named something like out-{datetime}.wav to double-check the data is correct
-                output_path = str(self.results_folder / f'coarse-input-data-{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.wav')
+                output_path = str(self.results_folder / f'device-{self.device}-coarse-input-data-{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.wav')
                 generated_wav = data_kwargs['raw_wave']
                 print(f"from device {self.device} coarse generated_wav.shape = {generated_wav.shape}")
                 # generated_wav is batch x time -> just save generated_wav[0], which needs to be a 1 x time
@@ -1261,7 +1261,7 @@ class FineTransformerTrainer(nn.Module):
             data_kwargs = self.data_tuple_to_kwargs(next(self.dl_iter))
             if self.steps == 0 and _ == 0:
                 # write the audio to file named something like out-{datetime}.wav to double-check the data is correct
-                output_path = str(self.results_folder / f'fine-input-data-{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.wav')
+                output_path = str(self.results_folder / f'device-{self.device}-fine-input-data-{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.wav')
                 generated_wav = data_kwargs['raw_wave']
                 print(f"from device {self.device} fine generated_wav.shape = {generated_wav.shape}")
                 # generated_wav is batch x time -> just save generated_wav[0], which needs to be a 1 x time
