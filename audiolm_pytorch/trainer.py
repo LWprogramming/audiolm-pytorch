@@ -993,7 +993,7 @@ class CoarseTransformerTrainer(nn.Module):
 
         # update vae (generator)
 
-        print(f"coarse training on device {device}")
+        # print(f"coarse training on device {device}")
         for _ in range(self.grad_accum_every):
             data_kwargs = dict(zip(self.ds_fields, next(self.dl_iter)))
             if self.steps == 0 and _ == 0:
