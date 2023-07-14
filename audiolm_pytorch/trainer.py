@@ -742,7 +742,7 @@ class SemanticTransformerTrainer(nn.Module):
                 # write the audio to file named something like out-{datetime}.wav to double-check the data is correct
                 output_path = str(self.results_folder / f'semantic-input-data-{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.wav')
                 generated_wav = data_kwargs['raw_wave']
-                print(f"semantic generated_wav.shape = {generated_wav.shape}")
+                print(f"from device {self.device}: semantic generated_wav.shape = {generated_wav.shape}")
                 # generated_wav is batch x time -> just save generated_wav[0], which needs to be a 1 x time
                 torchaudio.save(output_path, generated_wav[0].unsqueeze(0).cpu(), 24000)
                 # print(f"semantic data inspection: data_kwargs.keys() = {data_kwargs.keys()}")
@@ -999,7 +999,7 @@ class CoarseTransformerTrainer(nn.Module):
                 # write the audio to file named something like out-{datetime}.wav to double-check the data is correct
                 output_path = str(self.results_folder / f'coarse-input-data-{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.wav')
                 generated_wav = data_kwargs['raw_wave']
-                print(f"coarse generated_wav.shape = {generated_wav.shape}")
+                print(f"from device {self.device} coarse generated_wav.shape = {generated_wav.shape}")
                 # generated_wav is batch x time -> just save generated_wav[0], which needs to be a 1 x time
                 torchaudio.save(output_path, generated_wav[0].unsqueeze(0).cpu(), 24000)                # print(f"coarse data inspection: data_kwargs.keys() = {data_kwargs.keys()}")
             loss = self.train_wrapper(
@@ -1263,7 +1263,7 @@ class FineTransformerTrainer(nn.Module):
                 # write the audio to file named something like out-{datetime}.wav to double-check the data is correct
                 output_path = str(self.results_folder / f'fine-input-data-{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.wav')
                 generated_wav = data_kwargs['raw_wave']
-                print(f"fine data inspection: generated_wav.shape = {generated_wav.shape}")
+                print(f"from device {self.device} fine generated_wav.shape = {generated_wav.shape}")
                 # generated_wav is batch x time -> just save generated_wav[0], which needs to be a 1 x time
                 torchaudio.save(output_path, generated_wav[0].unsqueeze(0).cpu(), 24000)                # print(f"fine data inspection: data_kwargs.keys() = {data_kwargs.keys()}")
             loss = self.train_wrapper(**data_kwargs, return_loss = True)
