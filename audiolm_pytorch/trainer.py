@@ -993,7 +993,7 @@ class CoarseTransformerTrainer(nn.Module):
         logs = {}
 
         # update vae (generator)
-
+        print(f"device is {device} is here with self.grad_accum_every {self.grad_accum_every} and self.steps {self.steps}")
         # print(f"coarse training on device {device}")
         self.print(f"accelerator has {len(self.accelerator._dataloaders)} dataloaders. each dataloader's rng_types dumped: {[dl.rng_types for dl in self.accelerator._dataloaders]} and their corresponding synchronized_generator: {[dl.synchronized_generator for dl in self.accelerator._dataloaders]}")
         for _ in range(self.grad_accum_every):
