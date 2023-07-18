@@ -974,6 +974,13 @@ class CoarseTransformerTrainer(nn.Module):
     def is_local_main(self):
         return self.accelerator.is_local_main_process
 
+    def data_tuple_to_kwargs(self, data):
+        if not exists(self.ds_fields):
+            self.ds_fields = determine_types(data, DATASET_FIELD_TYPE_CONFIG)
+            assert not has_duplicates(self.ds_fields), 'dataset fields must not have duplicate field names'
+
+        return dict(zip(self.ds_fields, data))
+
     def train_step(self):
         device = self.device
 
@@ -990,7 +997,9 @@ class CoarseTransformerTrainer(nn.Module):
         # print(f"coarse training on device {device}")
         self.print(f"accelerator has {len(self.accelerator._dataloaders)} dataloaders. each dataloader's rng_types dumped: {[dl.rng_types for dl in self.accelerator._dataloaders]} and their corresponding synchronized_generator: {[dl.synchronized_generator for dl in self.accelerator._dataloaders]}")
         for _ in range(self.grad_accum_every):
-            data_kwargs = dict(zip(self.ds_fields, next(self.dl_iter)))
+            data_kwargs = self.data_tuple_to_kwargs(next(self.dl_iter))
+            loss = self.train_wrapper(**data_kwargs, return_loss = True)
+            # data_kwargs = dict(zip(self.ds_fields, next(self.dl_iter)))
             if self.steps == 0 and _ == 0:
                 # write the audio to file named something like out-{datetime}.wav to double-check the data is correct
                 output_path = str(self.results_folder / f'device-{self.device}-coarse-input-data-{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.wav')
@@ -998,10 +1007,10 @@ class CoarseTransformerTrainer(nn.Module):
                 print(f"from device {self.device} coarse generated_wav.shape = {generated_wav.shape}")
                 # generated_wav is batch x time -> just save generated_wav[0], which needs to be a 1 x time
                 torchaudio.save(output_path, generated_wav[0].unsqueeze(0).cpu(), 24000)                # print(f"coarse data inspection: data_kwargs.keys() = {data_kwargs.keys()}")
-            loss = self.train_wrapper(
-                **data_kwargs,
-                return_loss = True
-            )
+            # loss = self.train_wrapper(
+            #     **data_kwargs,
+            #     return_loss = True
+            # )
 
             self.accelerator.backward(loss / self.grad_accum_every)
 
