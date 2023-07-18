@@ -997,6 +997,7 @@ class CoarseTransformerTrainer(nn.Module):
         # print(f"coarse training on device {device}")
         print(f"on device {device}: accelerator has {len(self.accelerator._dataloaders)} dataloaders. each dataloader's rng_types dumped: {[dl.rng_types for dl in self.accelerator._dataloaders]} and their corresponding synchronized_generator: {[dl.synchronized_generator for dl in self.accelerator._dataloaders]}")
         for _ in range(self.grad_accum_every):
+            print(f"step {_} and arrived here on device {device}")
             data_kwargs = self.data_tuple_to_kwargs(next(self.dl_iter))
             loss = self.train_wrapper(**data_kwargs, return_loss = True)
             # data_kwargs = dict(zip(self.ds_fields, next(self.dl_iter)))
