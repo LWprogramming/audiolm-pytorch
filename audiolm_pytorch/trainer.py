@@ -1026,11 +1026,12 @@ class CoarseTransformerTrainer(nn.Module):
         # log
 
         self.print(f"coarse {steps}: loss: {logs['loss']}")
+        print(f"\ndevice {device} arrived at 1\n")
         self.accelerator.log({"train_loss": logs['loss']}, step=steps)
-
+        print(f"\ndevice {device} arrived at 2\n")
         # sample results every so often
         self.accelerator.wait_for_everyone()
-        print(f"\ndevice {device} arrived here\n")
+        print(f"\ndevice {device} arrived 3\n")
         if self.is_main and not (steps % self.save_results_every):
             data_kwargs = dict(zip(self.ds_fields, next(self.valid_dl_iter)))
 
