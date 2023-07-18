@@ -1029,7 +1029,7 @@ class CoarseTransformerTrainer(nn.Module):
 
         # sample results every so often
         self.accelerator.wait_for_everyone()
-
+        print(f"\ndevice {device} arrived here\n")
         if self.is_main and not (steps % self.save_results_every):
             data_kwargs = dict(zip(self.ds_fields, next(self.valid_dl_iter)))
 
@@ -1050,7 +1050,7 @@ class CoarseTransformerTrainer(nn.Module):
             self.save(model_path)
 
             self.print(f'coarse {steps}: saving model to {str(self.results_folder)}')
-
+        print(f"\ndevice {device} after save possibly\n")
         self.steps += 1
         return logs
 
