@@ -988,7 +988,7 @@ class CoarseTransformerTrainer(nn.Module):
         # update vae (generator)
 
         # print(f"coarse training on device {device}")
-        self.print(f"dumping accelerator rng_types and synchronized_generator and self.dl's device (i.e. is dataloader on cpu or gpu?): found {self.accelerator._dataloaders[0].rng_types} and {self.accelerator._dataloaders[0].synchronized_generator} and {self.dl.device}. accelerator has {len(self.accelerator._dataloaders)} dataloaders")
+        self.print(f"accelerator has {len(self.accelerator._dataloaders)} dataloaders. each dataloader's rng_types dumped: {[dl.rng_types for dl in self.accelerator._dataloaders]} and their corresponding synchronized_generator: {[dl.synchronized_generator for dl in self.accelerator._dataloaders]}")
         for _ in range(self.grad_accum_every):
             data_kwargs = dict(zip(self.ds_fields, next(self.dl_iter)))
             if self.steps == 0 and _ == 0:
