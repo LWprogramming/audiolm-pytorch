@@ -1717,14 +1717,25 @@ class FineTransformerWrapper(nn.Module):
                 sampled = rearrange(sampled, 'b -> b 1')
                 sampled_fine_token_ids = torch.cat((sampled_fine_token_ids, sampled), dim = -1)
 
-        sampled_fine_token_ids = mask_out_after_eos_id(sampled_fine_token_ids, self.eos_id, keep_eos = False)
+        print(f"sampled fine token ids shape: {sampled_fine_token_ids.shape}")
+        # expect this to be batch x num_tokens, num tokens ie num frames being int(num_timesteps / self.codec.seq_len_multiple_of) so probably like 1 x (num timesteps / (2 * 4 * 5 * 8)) = 1 x (num_timesteps / 320). notably 500 x 320 == 16k, i forget the math exactly
+        indices_of_eos_id = torch.where(sampled_fine_token_ids == self.eos_id)
+        print(f"num eos ids: {len(indices_of_eos_id[0])}")
+        print(f"indices of eos id: {[(i.item(), j.item()) for i, j in zip(indices_of_eos_id[0], indices_of_eos_id[1])]}")
 
+        sampled_fine_token_ids = mask_out_after_eos_id(sampled_fine_token_ids, self.eos_id, keep_eos = False)
+        print(f"AFTER MASKING OUT AFTER EOS")
+        print(f"num eos ids: {len(indices_of_eos_id[0])}")
+        print(
+            f"indices of eos id: {[(i.item(), j.item()) for i, j in zip(indices_of_eos_id[0], indices_of_eos_id[1])]}")
         # reshape coarse and fine tokens for quantization dimension
 
         sampled_fine_token_ids = rearrange(sampled_fine_token_ids, 'b (n q) -> b n q', q = self.num_fine_quantizers)
         coarse_token_ids = rearrange(coarse_token_ids, 'b (n q) -> b n q', q = self.num_coarse_quantizers)
 
         # whether to mask out fine token positions where the coarse token ids are all padding (variable lengthed training)
+
+        print(f"mask out generated fine tokens is {mask_out_generated_fine_tokens}")
 
         if mask_out_generated_fine_tokens:
             pos_is_all_padding = (coarse_token_ids == self.pad_id).all(dim = -1, keepdim = True)
@@ -1745,8 +1756,9 @@ class FineTransformerWrapper(nn.Module):
         # 1 is batch size, 8 is num_quantizers (confirmed when I ran codec with 12 quantizers instead)
         # 512 is related to max_time_steps which is a result of CoarseTransformerWrapper's thing about stopping in the last quantizer
         # (see the code in CoarseTransformerWrapper, where max_time_steps is explicitly set as an argument in its generate() method)
-        # print(f"coarse_and_fine_ids.shape {coarse_and_fine_ids.shape} to be decoded from codebook indices by codec")
+        print(f"coarse_and_fine_ids.shape {coarse_and_fine_ids.shape} to be decoded from codebook indices by codec")
         wav = self.codec.decode_from_codebook_indices(coarse_and_fine_ids)
+        print(f"wav shape after codec.decode_from_codebook_indices: {wav.shape}")
         return rearrange(wav, 'b 1 n -> b n')
 
     def forward(
