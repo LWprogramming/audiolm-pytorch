@@ -993,11 +993,11 @@ class CoarseTransformerTrainer(nn.Module):
         logs = {}
 
         # update vae (generator)
-        print(f"device is {device} is here with self.grad_accum_every {self.grad_accum_every} and self.steps {self.steps}")
+        # print(f"device is {device} is here with self.grad_accum_every {self.grad_accum_every} and self.steps {self.steps}")
         # print(f"coarse training on device {device}")
-        print(f"on device {device}: accelerator has {len(self.accelerator._dataloaders)} dataloaders. each dataloader's rng_types dumped: {[dl.rng_types for dl in self.accelerator._dataloaders]} and their corresponding synchronized_generator: {[dl.synchronized_generator for dl in self.accelerator._dataloaders]}")
+        # print(f"on device {device}: accelerator has {len(self.accelerator._dataloaders)} dataloaders. each dataloader's rng_types dumped: {[dl.rng_types for dl in self.accelerator._dataloaders]} and their corresponding synchronized_generator: {[dl.synchronized_generator for dl in self.accelerator._dataloaders]}")
         for _ in range(self.grad_accum_every):
-            print(f"step {_} and arrived here on device {device}")
+            # print(f"step {_} and arrived here on device {device}")
             data_kwargs = self.data_tuple_to_kwargs(next(self.dl_iter))
             loss = self.train_wrapper(**data_kwargs, return_loss = True)
             # data_kwargs = dict(zip(self.ds_fields, next(self.dl_iter)))
@@ -1026,12 +1026,12 @@ class CoarseTransformerTrainer(nn.Module):
         # log
 
         self.print(f"coarse {steps}: loss: {logs['loss']}")
-        print(f"\ndevice {device} arrived at 1\n")
+        # print(f"\ndevice {device} arrived at 1\n")
         self.accelerator.log({"train_loss": logs['loss']}, step=steps)
-        print(f"\ndevice {device} arrived at 2\n")
+        # print(f"\ndevice {device} arrived at 2\n")
         # sample results every so often
         self.accelerator.wait_for_everyone()
-        print(f"\ndevice {device} arrived 3\n")
+        # print(f"\ndevice {device} arrived 3\n")
         if self.is_main and not (steps % self.save_results_every):
             data_kwargs = dict(zip(self.ds_fields, next(self.valid_dl_iter)))
 
@@ -1052,7 +1052,7 @@ class CoarseTransformerTrainer(nn.Module):
             self.save(model_path)
 
             self.print(f'coarse {steps}: saving model to {str(self.results_folder)}')
-        print(f"\ndevice {device} after save possibly\n")
+        # print(f"\ndevice {device} after save possibly\n")
         self.steps += 1
         return logs
 
