@@ -1002,6 +1002,7 @@ class CoarseTransformerTrainer(nn.Module):
             loss = self.train_wrapper(**data_kwargs, return_loss = True)
             # data_kwargs = dict(zip(self.ds_fields, next(self.dl_iter)))
             if self.steps == 0 and _ == 0:
+                print(f"coarse dataloader size = {len(self.dl)} for device {self.device}")
                 # write the audio to file named something like out-{datetime}.wav to double-check the data is correct
                 output_path = str(self.results_folder / f'device-{self.device}-coarse-input-data-{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.wav')
                 generated_wav = data_kwargs['raw_wave']
