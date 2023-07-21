@@ -1065,7 +1065,9 @@ class CoarseTransformerTrainer(nn.Module):
     def train(self, log_fn = noop):
 
         while self.steps < self.num_train_steps:
+            self.print(f"starting step {self.steps} out of {self.num_train_steps}")
             logs = self.train_step()
+            self.print(f"finished step {self.steps} out of {self.num_train_steps}")
             log_fn(logs)
 
         self.print('training complete')
