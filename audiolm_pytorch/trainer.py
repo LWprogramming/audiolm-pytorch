@@ -1063,7 +1063,7 @@ class CoarseTransformerTrainer(nn.Module):
         return logs
 
     def train(self, log_fn = noop):
-
+        print(f"from device {self.device}: entered train with dataset length {len(self.ds)}")
         while self.steps < self.num_train_steps:
             self.print(f"starting step {self.steps} out of {self.num_train_steps}")
             logs = self.train_step()
