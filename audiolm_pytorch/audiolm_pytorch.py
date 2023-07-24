@@ -436,6 +436,19 @@ class Transformer(nn.Module):
 
         return self.norm(x)
 
+    def load(self, path):
+        path = Path(path)
+        assert path.exists()
+        pkg = torch.load(str(path), map_location = 'cpu')
+
+        # check version
+
+        if 'version' in pkg and version.parse(pkg['version']) < version.parse(__version__):
+            print(f'model was trained on older version {pkg["version"]} of audiolm-pytorch')
+
+        transformer = self.accelerator.unwrap_model(self.transformer)
+        transformer.load_state_dict(pkg['model'])
+
 # the three hierarchical transformers
 
 class SemanticTransformer(nn.Module):
