@@ -51,6 +51,15 @@ from accelerate.utils import DistributedDataParallelKwargs
 
 DEFAULT_SAMPLE_RATE = 16000
 
+# make sure only one trainer is instantiated
+
+ONE_TRAINER_INSTANTIATED = False
+
+def check_one_trainer():
+    global ONE_TRAINER_INSTANTIATED
+    assert not ONE_TRAINER_INSTANTIATED, 'only one Trainer can be instantiated at a time for training'
+    ONE_TRAINER_INSTANTIATED = True
+
 # for automatically routing data emitted from a dataset to keywords of the transformer wrappers
 
 DATASET_FIELD_TYPE_CONFIG = dict(
@@ -119,7 +128,12 @@ def checkpoint_num_steps(checkpoint_path):
     Filename format assumed to be something like "/path/to/semantic.transformer.20000.pt" which is
     for 20k train steps. Returns 20000 in that case.
     """
-    return int(re.findall(r'\d+', str(checkpoint_path))[-1])
+    results = re.findall(r'\d+', str(checkpoint_path))
+
+    if len(results) == 0:
+        return 0
+
+    return int(results[-1])
 
 # main trainer class
 
@@ -163,6 +177,7 @@ class SoundStreamTrainer(nn.Module):
         train/val DataLoader instances.
         """
         super().__init__()
+        check_one_trainer()
 
         if accelerator:
             self.accelerator = accelerator
@@ -355,7 +370,9 @@ class SoundStreamTrainer(nn.Module):
         for key, _ in self.multiscale_discriminator_iter():
             discr_optim = getattr(self, key)
             discr_optim.load_state_dict(pkg[key])
+
         # + 1 to start from the next step and avoid overwriting the last checkpoint
+
         self.steps = torch.tensor([checkpoint_num_steps(path) + 1], device=self.device)
 
     def multiscale_discriminator_iter(self):
@@ -567,7 +584,7 @@ class SemanticTransformerTrainer(nn.Module):
         force_clear_prev_results = None
     ):
         super().__init__()
-
+        check_one_trainer()
         kwargs = DistributedDataParallelKwargs(find_unused_parameters = True)
         self.accelerator = Accelerator(kwargs_handlers = [kwargs], **accelerate_kwargs)
         # self.accelerator = Accelerator(**accelerate_kwargs)
@@ -674,18 +691,11 @@ class SemanticTransformerTrainer(nn.Module):
         torch.save(pkg, path)
 
     def load(self, path):
-        path = Path(path)
-        assert path.exists()
-        pkg = torch.load(str(path), map_location = 'cpu')
-
-        # check version
-
-        if 'version' in pkg and version.parse(pkg['version']) < version.parse(__version__):
-            print(f'model was trained on older version {pkg["version"]} of audiolm-pytorch')
-
         transformer = self.accelerator.unwrap_model(self.transformer)
-        transformer.load_state_dict(pkg['model'])
+        pkg = transformer.load(path)
+        # trainer-specific things
         self.optim.load_state_dict(pkg['optim'])
+
         # + 1 to start from the next step and avoid overwriting the last checkpoint
         self.steps = torch.tensor([checkpoint_num_steps(path) + 1], device=self.device)
 
@@ -821,6 +831,7 @@ class CoarseTransformerTrainer(nn.Module):
         force_clear_prev_results = None
     ):
         super().__init__()
+        check_one_trainer()
         kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
         self.accelerator = Accelerator(kwargs_handlers=[kwargs], **accelerate_kwargs)
         # self.accelerator = Accelerator(**accelerate_kwargs)
@@ -935,19 +946,11 @@ class CoarseTransformerTrainer(nn.Module):
         torch.save(pkg, path)
 
     def load(self, path):
-        path = Path(path)
-        assert path.exists()
-        pkg = torch.load(str(path), map_location = 'cpu')
-
-        # check version
-
-        if 'version' in pkg and version.parse(pkg['version']) < version.parse(__version__):
-            print(f'model was trained on older version {pkg["version"]} of audiolm-pytorch')
-
         transformer = self.accelerator.unwrap_model(self.transformer)
-        transformer.load_state_dict(pkg['model'])
-
+        pkg = transformer.load(path)
+        # trainer-specific things
         self.optim.load_state_dict(pkg['optim'])
+
         # + 1 to start from the next step and avoid overwriting the last checkpoint
         self.steps = torch.tensor([checkpoint_num_steps(path) + 1], device=self.device)
 
@@ -1102,6 +1105,7 @@ class FineTransformerTrainer(nn.Module):
         force_clear_prev_results = None
     ):
         super().__init__()
+        check_one_trainer()
         kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
         self.accelerator = Accelerator(kwargs_handlers=[kwargs], **accelerate_kwargs)
         # self.accelerator = Accelerator(**accelerate_kwargs)
@@ -1211,22 +1215,13 @@ class FineTransformerTrainer(nn.Module):
         torch.save(pkg, path)
 
     def load(self, path):
-        path = Path(path)
-        assert path.exists()
-        pkg = torch.load(str(path), map_location = 'cpu')
-
-        # check version
-
-        if 'version' in pkg and version.parse(pkg['version']) < version.parse(__version__):
-            print(f'model was trained on older version {pkg["version"]} of audiolm-pytorch')
-
         transformer = self.accelerator.unwrap_model(self.transformer)
-        transformer.load_state_dict(pkg['model'])
-
+        pkg = transformer.load(path)
+        # trainer-specific things
         self.optim.load_state_dict(pkg['optim'])
+
         # + 1 to start from the next step and avoid overwriting the last checkpoint
         self.steps = torch.tensor([checkpoint_num_steps(path) + 1], device=self.device)
-
 
     def print(self, msg):
         self.accelerator.print(msg)
