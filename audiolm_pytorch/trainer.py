@@ -726,7 +726,7 @@ class SemanticTransformerTrainer(nn.Module):
         if not exists(self.ds_fields):
             self.ds_fields = determine_types(data, DATASET_FIELD_TYPE_CONFIG)
             assert not has_duplicates(self.ds_fields), 'dataset fields must not have duplicate field names'
-        print(f"self.ds_fields = {self.ds_fields}, data shape = {data.shape} on device {self.device}")
+        print(f"self.ds_fields = {self.ds_fields}, data shape = {data[0].shape} and data is on device {data[1]}")
 
         return dict(zip(self.ds_fields, data))
 
