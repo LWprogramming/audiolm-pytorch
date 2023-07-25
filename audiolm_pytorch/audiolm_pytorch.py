@@ -509,6 +509,8 @@ class SemanticTransformer(nn.Module):
         if 'version' in pkg and version.parse(pkg['version']) < version.parse(__version__):
             print(f'model was trained on older version {pkg["version"]} of audiolm-pytorch')
         self.load_state_dict(pkg['model'])
+        for name, param in self.named_parameters():
+            print(name, param.device)
         return pkg
 
     def forward_with_cond_scale(
