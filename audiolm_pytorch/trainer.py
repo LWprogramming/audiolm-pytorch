@@ -1008,7 +1008,7 @@ class CoarseTransformerTrainer(nn.Module):
             loss = self.train_wrapper(**data_kwargs, return_loss = True)
             # data_kwargs = dict(zip(self.ds_fields, next(self.dl_iter)))
             if self.steps == 0 and _ == 0:
-                print(f"coarse dataloader size = {len(self.dl)} for device {self.device}")
+                # print(f"coarse dataloader size = {len(self.dl)} for device {self.device}")
                 # write the audio to file named something like out-{datetime}.wav to double-check the data is correct
                 output_path = str(self.results_folder / f'device-{self.device}-coarse-input-data-{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.wav')
                 generated_wav = data_kwargs['raw_wave']
@@ -1035,10 +1035,10 @@ class CoarseTransformerTrainer(nn.Module):
         self.print(f"coarse {steps}: loss: {logs['loss']}")
         # print(f"\ndevice {device} arrived at 1\n")
         self.accelerator.log({"train_loss": logs['loss']}, step=steps)
-        print(f"{steps}: device {device} arrived at 2\n")
+        # print(f"{steps}: device {device} arrived at 2\n")
         # sample results every so often
         self.accelerator.wait_for_everyone()
-        print(f"{steps}: device {device} arrived 3\n") # in a given step: expect to never see any device hit 3 until everyone's hit 2
+        # print(f"{steps}: device {device} arrived 3\n") # in a given step: expect to never see any device hit 3 until everyone's hit 2
         if self.is_main and not (steps % self.save_results_every):
             data_kwargs = dict(zip(self.ds_fields, next(self.valid_dl_iter)))
 
@@ -1052,9 +1052,9 @@ class CoarseTransformerTrainer(nn.Module):
 
             self.print(f'coarse {steps}: valid loss {valid_loss}')
             self.accelerator.log({"valid_loss": valid_loss}, step=steps)
-        print(f"{steps}: accelerator waiting for everyone on device {device}, arrived 4")
+        # print(f"{steps}: accelerator waiting for everyone on device {device}, arrived 4")
         self.accelerator.wait_for_everyone()
-        print(f"{steps}: accelerator waited for everyone on device {device}, arrived 5")
+        # print(f"{steps}: accelerator waited for everyone on device {device}, arrived 5")
         # save model every so often
         if self.is_main and not (steps % self.save_model_every):
             model_path = str(self.results_folder / f'coarse.transformer.{steps}.pt')
@@ -1062,18 +1062,18 @@ class CoarseTransformerTrainer(nn.Module):
 
             self.print(f'coarse {steps}: saving model to {str(self.results_folder)}')
         # print(f"\ndevice {device} after save possibly\n")
-        print(f"{steps}: accelerator waiting for everyone on device {device}, arrived 6")
+        # print(f"{steps}: accelerator waiting for everyone on device {device}, arrived 6")
         self.accelerator.wait_for_everyone()
-        print(f"{steps}: accelerator waited for everyone on device {device}, arrived 7")
+        # print(f"{steps}: accelerator waited for everyone on device {device}, arrived 7")
         self.steps += 1
         return logs
 
     def train(self, log_fn = noop):
-        print(f"from device {self.device}: entered train with dataset length {len(self.ds)}")
+        # print(f"from device {self.device}: entered train with dataset length {len(self.ds)}")
         while self.steps < self.num_train_steps:
-            self.print(f"starting step {self.steps} out of {self.num_train_steps}")
+            # self.print(f"starting step {self.steps} out of {self.num_train_steps}")
             logs = self.train_step()
-            self.print(f"finished step {self.steps} out of {self.num_train_steps}")
+            # self.print(f"finished step {self.steps} out of {self.num_train_steps}")
             log_fn(logs)
 
         self.print('training complete')
