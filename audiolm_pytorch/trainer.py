@@ -730,17 +730,6 @@ class SemanticTransformerTrainer(nn.Module):
         if not exists(self.ds_fields):
             self.ds_fields = determine_types(data, DATASET_FIELD_TYPE_CONFIG)
             assert not has_duplicates(self.ds_fields), 'dataset fields must not have duplicate field names'
-        # note: data is sometimes none. why?
-        if data is None:
-            raise AssertionError('data is none')
-        else:
-            print(f"self.ds_fields = {self.ds_fields}")
-            if len(data) == 2:
-                print(f" data shape = {data[0].shape} and data is on device {data[1]}")
-            if len(data) == 1:
-                print(f" data shape = {data[0].shape} and device is {data[0].device}")
-            else:
-                print(f"data is type {type(data)} and has length {len(data)}")
         return dict(zip(self.ds_fields, data))
 
     def train_step(self):

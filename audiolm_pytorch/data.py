@@ -108,9 +108,7 @@ class SoundDataset(Dataset):
         output = tuple(output)
 
         # return only one audio, if only one target resample freq
-        print(f"num_outputs: {num_outputs} and len(output): {len(output)}")
         if num_outputs == 1:
-            print(f"output[0] is None?:  {output[0] is None}")
             return output[0]
 
         return output
