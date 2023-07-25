@@ -562,10 +562,6 @@ class SemanticTransformer(nn.Module):
         if return_loss:
             labels, ids = ids.clone(), ids[:, :-1]
 
-        for name, param in self.named_parameters():
-            print(name, param.device)
-        print(f"ids.device: {ids.device}")
-        print(f"self.semantic_embedding.device: {self.semantic_embedding.device}")
         tokens = get_embeds(self.semantic_embedding, ids)
 
         start_tokens = repeat(self.start_token, 'd -> b 1 d', b = ids.shape[0])
@@ -1205,9 +1201,7 @@ class SemanticTransformerWrapper(nn.Module):
         super().__init__()
         self.wav2vec = wav2vec
         self.transformer = transformer
-        print(f"moving from {self.device} to {transformer.device}")
         self.to(transformer.device)
-        print(f"now on device {self.device}")
         self.audio_conditioner = audio_conditioner
 
         assert not (exists(audio_conditioner) and not transformer.has_condition), 'if conditioning on audio embeddings from mulan, transformer has_condition must be set to True'
