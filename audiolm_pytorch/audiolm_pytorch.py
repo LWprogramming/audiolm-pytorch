@@ -509,8 +509,6 @@ class SemanticTransformer(nn.Module):
         if 'version' in pkg and version.parse(pkg['version']) < version.parse(__version__):
             print(f'model was trained on older version {pkg["version"]} of audiolm-pytorch')
         self.load_state_dict(pkg['model'])
-        for name, param in self.named_parameters():
-            print(name, param.device)
         return pkg
 
     def forward_with_cond_scale(
@@ -564,6 +562,10 @@ class SemanticTransformer(nn.Module):
         if return_loss:
             labels, ids = ids.clone(), ids[:, :-1]
 
+        for name, param in self.named_parameters():
+            print(name, param.device)
+        print(f"ids.device: {ids.device}")
+        print(f"self.semantic_embedding.device: {self.semantic_embedding.device}")
         tokens = get_embeds(self.semantic_embedding, ids)
 
         start_tokens = repeat(self.start_token, 'd -> b 1 d', b = ids.shape[0])
