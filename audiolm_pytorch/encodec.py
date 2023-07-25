@@ -152,8 +152,8 @@ class EncodecWrapper(nn.Module):
         # if num_samples doesn't divide perfectly).
         # num_frames == the number of acoustic tokens you have, one token per frame
         codes = rearrange(quantized_indices, 'b t q -> q b t')
-        print(f"codes.shape: {codes.shape}")
+        # print(f"codes.shape: {codes.shape}")
         emb = self.model.quantizer.decode(codes)
         # emb shape: batch x self.model.quantizer.dimension x T. Note self.model.quantizer.dimension is the embedding dimension
-        print(f"embedding shape from encodec.py: {emb.shape}")
+        # print(f"embedding shape from encodec.py: {emb.shape}")
         return self.model.decoder(emb)
