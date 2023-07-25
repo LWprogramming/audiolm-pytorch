@@ -505,6 +505,7 @@ class SemanticTransformer(nn.Module):
         device = self.device
         path = Path(path)
         assert path.exists()
+        print(f"device for semantic transformer: {device}")
         pkg = torch.load(str(path), map_location = device)
         # check version
         if 'version' in pkg and version.parse(pkg['version']) < version.parse(__version__):
