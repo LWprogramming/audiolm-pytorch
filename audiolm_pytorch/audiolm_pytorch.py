@@ -1981,6 +1981,9 @@ class AudioLM(nn.Module):
         if exists(prime_wave):
             prime_wave = prime_wave.to(self.device)
 
+        print(f"SEMANTIC WRAPPER DEVICE {self.semantic.device}")
+        print(f"SEMANTIC TRANSFORMER DEVICE {self.semantic.transformer.device}")
+
         semantic_token_ids = self.semantic.generate(
             text_embeds = text_embeds if self.semantic_has_condition else None,
             batch_size = batch_size,
