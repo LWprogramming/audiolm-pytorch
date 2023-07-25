@@ -85,7 +85,10 @@ def noop(*args, **kwargs):
 def cycle(dl):
     while True:
         for data in dl:
+            if data is None:
+                raise AssertionError('data loader returned None')
             yield data
+    raise AssertionError('should never reach here')
 
 def cast_tuple(t):
     return t if isinstance(t, (tuple, list)) else (t,)
@@ -727,7 +730,11 @@ class SemanticTransformerTrainer(nn.Module):
         if not exists(self.ds_fields):
             self.ds_fields = determine_types(data, DATASET_FIELD_TYPE_CONFIG)
             assert not has_duplicates(self.ds_fields), 'dataset fields must not have duplicate field names'
-        print(f"self.ds_fields = {self.ds_fields}, data shape = {data[0].shape} and data is on device {data[1]}")
+        # note: data is sometimes none. why?
+        if data is None:
+            raise AssertionError('data is none')
+        else:
+            print(f"self.ds_fields = {self.ds_fields}, data shape = {data[0].shape} and data is on device {data[1]}")
 
         return dict(zip(self.ds_fields, data))
 
