@@ -507,12 +507,12 @@ class SemanticTransformer(nn.Module):
         assert path.exists()
         print(f"device for semantic transformer: {device}")
         pkg = torch.load(str(path), map_location = device)
-        print(f"pkg device: {pkg['model'].device}")
+        print(f"pkg device for each param/buffer in pkg model: {[p.device for p in pkg['model'].values()]}")
         # check version
         if 'version' in pkg and version.parse(pkg['version']) < version.parse(__version__):
             print(f'model was trained on older version {pkg["version"]} of audiolm-pytorch')
         self.load_state_dict(pkg['model'])
-        print(f"package device and self deivce {pkg['model'].device} {self.device}")
+        # print(f"package device and self deivce {pkg['model'].device} {self.device}")
         return pkg
 
     def forward_with_cond_scale(
