@@ -1053,7 +1053,7 @@ class CoarseTransformerTrainer(nn.Module):
             self.print(f'coarse {steps}: valid loss {valid_loss}')
             self.accelerator.log({"valid_loss": valid_loss}, step=steps)
         # print(f"{steps}: accelerator waiting for everyone on device {device}, arrived 4")
-        self.accelerator.wait_for_everyone()
+        # self.accelerator.wait_for_everyone()
         # print(f"{steps}: accelerator waited for everyone on device {device}, arrived 5")
         # save model every so often
         if self.is_main and not (steps % self.save_model_every):
@@ -1063,7 +1063,7 @@ class CoarseTransformerTrainer(nn.Module):
             self.print(f'coarse {steps}: saving model to {str(self.results_folder)}')
         # print(f"\ndevice {device} after save possibly\n")
         # print(f"{steps}: accelerator waiting for everyone on device {device}, arrived 6")
-        self.accelerator.wait_for_everyone()
+        # self.accelerator.wait_for_everyone()
         # print(f"{steps}: accelerator waited for everyone on device {device}, arrived 7")
         self.steps += 1
         return logs
