@@ -762,6 +762,7 @@ class SemanticTransformerTrainer(nn.Module):
                 if self.accelerator.is_main_process:
                     output_path = str(self.results_folder / f'pre-checkpoint-semantic-input-data-{steps}-steps.wav')
                     generated_wav = data_kwargs['raw_wave']
+                    self.print(f"writing to output path {output_path}")
                     torchaudio.save(output_path, generated_wav[0].unsqueeze(0).cpu(), 24000)
                 # ok, now that we've saved the data, continue
                 self.accelerator.wait_for_everyone()
