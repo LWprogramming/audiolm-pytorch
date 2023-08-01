@@ -755,6 +755,17 @@ class SemanticTransformerTrainer(nn.Module):
                 # generated_wav is batch x time -> just save generated_wav[0], which needs to be a 1 x time
                 torchaudio.save(output_path, generated_wav[0].unsqueeze(0).cpu(), 24000)
                 # print(f"semantic data inspection: data_kwargs.keys() = {data_kwargs.keys()}")
+
+            # if we JUST saved a checkpoint (and in this experimental run are loading from ckpt as well), then log what the input data looks like, so we can compare across runs to see if the dataloader is repeatedly giving us the same data
+            if steps % self.save_model_every == 1:
+                # save data
+                if self.accelerator.is_main_process:
+                    output_path = str(self.results_folder / f'pre-checkpoint-semantic-input-data-{steps}-steps.wav')
+                    generated_wav = data_kwargs['raw_wave']
+                    torchaudio.save(output_path, generated_wav[0].unsqueeze(0).cpu(), 24000)
+                # ok, now that we've saved the data, continue
+                self.accelerator.wait_for_everyone()
+
             loss = self.train_wrapper(**data_kwargs, return_loss = True)
 
             self.accelerator.backward(loss / self.grad_accum_every)
