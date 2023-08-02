@@ -718,6 +718,8 @@ class SemanticTransformerTrainer(nn.Module):
             version = __version__
         )
         torch.save(pkg, path)
+        torch.save(self.dl, path + '_dl')
+        torch.save(self.valid_dl, path + '_valid_dl')
 
     def load(self, path):
         transformer = self.accelerator.unwrap_model(self.transformer)
@@ -730,15 +732,17 @@ class SemanticTransformerTrainer(nn.Module):
         self.num_samples_seen = pkg['num_samples_seen']
         print(f"seen {self.num_samples_seen} samples so far on steps {self.steps}")
         # fast-forward the dataloader by num_samples_seen so that we continue training from where we left off
-        self.ds.fast_forward = True # TODO: if this works, apply to other dataloaders including my custom cocochorales one
-        self.valid_ds.fast_forward = True
-        for i in range(self.num_samples_seen):
-            print(f"i is {i}")
-            next(self.dl_iter)
-            if i % self.save_results_every == 0:
-                next(self.valid_dl_iter)
-        self.ds.fast_forward = False
-        self.valid_ds.fast_forward = False
+        self.dl = torch.load(path + '_dl')
+        self.valid_dl = torch.load(path + '_valid_dl')
+        # self.ds.fast_forward = True # TODO: if this works, apply to other dataloaders including my custom cocochorales one
+        # self.valid_ds.fast_forward = True
+        # for i in range(self.num_samples_seen):
+        #     print(f"i is {i}")
+        #     next(self.dl_iter)
+        #     if i % self.save_results_every == 0:
+        #         next(self.valid_dl_iter)
+        # self.ds.fast_forward = False
+        # self.valid_ds.fast_forward = False
 
     def print(self, msg):
         self.accelerator.print(msg)
