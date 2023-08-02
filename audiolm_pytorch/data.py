@@ -57,11 +57,14 @@ class SoundDataset(Dataset):
         self.seq_len_multiple_of = cast_tuple(seq_len_multiple_of, num_outputs)
 
         assert len(self.max_length) == len(self.target_sample_hz) == len(self.seq_len_multiple_of)
+        self.fast_forward = False # iff true, then __getitem__ will just pass because the model trainer is loading from checkpoint and we want to fast-forward through the dataloader until all the training samples that the model has already seen are skipped
 
     def __len__(self):
         return len(self.files)
 
     def __getitem__(self, idx):
+        if self.fast_forward:
+            pass
         file = self.files[idx]
 
         data, sample_hz = torchaudio.load(file)
