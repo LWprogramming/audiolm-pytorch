@@ -10,6 +10,8 @@ from torch.autograd import grad as torch_grad
 import torch.nn.functional as F
 from torch.nn.utils.rnn import pad_sequence
 
+import torchaudio
+
 from einops import rearrange, repeat, reduce
 from einops.layers.torch import Rearrange
 
@@ -1230,6 +1232,7 @@ class SemanticTransformerWrapper(nn.Module):
         text: Optional[List[str]] = None,
         text_embeds = None,
         prime_wave = None,
+        prime_wave_input_sample_hz = None,
         prime_ids = None,
         batch_size = 1,
         cond_scale = 3,
@@ -1245,7 +1248,11 @@ class SemanticTransformerWrapper(nn.Module):
         if exists(prime_wave):
             assert not exists(prime_ids)
             assert exists(self.wav2vec)
-            ids = self.wav2vec(prime_wave, flatten = False)
+            ids = self.wav2vec(
+                prime_wave,
+                flatten = False,
+                input_sample_hz = prime_wave_input_sample_hz
+            )
         elif exists(prime_ids):
             ids = prime_ids
         else:
@@ -1415,6 +1422,7 @@ class CoarseTransformerWrapper(nn.Module):
         *,
         semantic_token_ids,
         prime_wave: Optional[Tensor] = None,
+        prime_wave_input_sample_hz = None,
         prime_coarse_token_ids: Optional[Tensor] = None,
         text: Optional[List[str]] = None,
         text_embeds = None,
@@ -1440,7 +1448,13 @@ class CoarseTransformerWrapper(nn.Module):
             assert exists(self.codec)
             with torch.inference_mode():
                 self.codec.eval()
-                _, indices, _ = self.codec(prime_wave, return_encoded = True)
+
+                _, indices, _ = self.codec(
+                    prime_wave,
+                    return_encoded = True,
+                    input_sample_hz = prime_wave_input_sample_hz
+                )
+
                 coarse_token_ids = indices[..., :self.num_coarse_quantizers]
                 coarse_token_ids = rearrange(coarse_token_ids, 'b ... -> b (...)')
         else:
@@ -1686,6 +1700,7 @@ class FineTransformerWrapper(nn.Module):
         *,
         coarse_token_ids,
         prime_wave: Optional[Tensor] = None,
+        prime_wave_input_sample_hz = None,
         prime_fine_token_ids: Optional[Tensor] = None,
         text: Optional[List[str]] = None,
         text_embeds = None,
@@ -1722,7 +1737,11 @@ class FineTransformerWrapper(nn.Module):
             assert exists(self.codec)
             with torch.inference_mode():
                 self.codec.eval()
-                _, token_ids, _ = self.codec(prime_wave, return_encoded = True)
+                _, token_ids, _ = self.codec(
+                    prime_wave,
+                    return_encoded = True,
+                    input_sample_hz = prime_wave_input_sample_hz
+                )
 
             fine_token_ids = token_ids[..., self.num_coarse_quantizers:]
             fine_token_ids = rearrange(fine_token_ids, 'b ... -> b (...)')
@@ -1967,6 +1986,8 @@ class AudioLM(nn.Module):
         text: Optional[List[str]] = None,
         text_embeds: Optional[Tensor] = None,
         prime_wave = None,
+        prime_wave_input_sample_hz = None,
+        prime_wave_path = None,
         max_length = 2048,
         return_coarse_generated_wave = False,
         mask_out_generated_fine_tokens = False
@@ -1977,13 +1998,23 @@ class AudioLM(nn.Module):
             if exists(text):
                 text_embeds = self.semantic.embed_text(text)
 
+        assert not (exists(prime_wave) and exists(prime_wave_path)), 'prompt audio must be given as either `prime_wave: Tensor` or `prime_wave_path: str`'
+
         if exists(prime_wave):
+            assert exists(prime_wave_input_sample_hz), 'the input sample frequency for the prompt audio must be given as `prime_wave_input_sample_hz: int`'
+            prime_wave = prime_wave.to(self.device)
+        elif exists(prime_wave_path):
+            prime_wave_path = Path(prime_wave_path)
+            assert exists(prime_wave_path), f'file does not exist at {str(prime_wave_path)}'
+
+            prime_wave, prime_wave_input_sample_hz = torchaudio.load(str(prime_wave_path))
             prime_wave = prime_wave.to(self.device)
 
         semantic_token_ids = self.semantic.generate(
             text_embeds = text_embeds if self.semantic_has_condition else None,
             batch_size = batch_size,
             prime_wave = prime_wave,
+            prime_wave_input_sample_hz = prime_wave_input_sample_hz,
             max_length = max_length
         )
 
@@ -1995,6 +2026,7 @@ class AudioLM(nn.Module):
             text_embeds = text_embeds if self.coarse_has_condition else None,
             semantic_token_ids = semantic_token_ids,
             prime_wave = prime_wave,
+            prime_wave_input_sample_hz = prime_wave_input_sample_hz,
             reconstruct_wave = return_coarse_generated_wave
         )
         # print(f"generated coarse token id shape: {coarse_token_ids_or_recon_wave.shape}") # should be (batch_size, num_coarse_tokens, num_coarse_quantizers, )
@@ -2011,6 +2043,7 @@ class AudioLM(nn.Module):
             text_embeds = text_embeds if self.fine_has_condition else None,
             coarse_token_ids = coarse_token_ids_or_recon_wave,
             prime_wave = prime_wave,
+            prime_wave_input_sample_hz = prime_wave_input_sample_hz,
             reconstruct_wave = True,
             mask_out_generated_fine_tokens = mask_out_generated_fine_tokens
         )
