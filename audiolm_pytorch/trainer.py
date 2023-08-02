@@ -728,8 +728,10 @@ class SemanticTransformerTrainer(nn.Module):
         # + 1 to start from the next step and avoid overwriting the last checkpoint
         self.steps = torch.tensor([checkpoint_num_steps(path) + 1], device=self.device)
         self.num_samples_seen = pkg['num_samples_seen']
+        print(f"seen {self.num_samples_seen} samples so far on steps {self.steps}")
         # fast-forward the dataloader by num_samples_seen so that we continue training from where we left off
         for i in range(self.num_samples_seen):
+            print(f"i is {i}")
             next(self.dl_iter)
             if i % self.save_results_every == 0:
                 next(self.valid_dl_iter)
