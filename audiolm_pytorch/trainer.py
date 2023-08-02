@@ -710,6 +710,7 @@ class SemanticTransformerTrainer(nn.Module):
         self.accelerator.init_trackers("semantic", config=hps)
 
     def save(self, path):
+        print(f"self.num_samples_seen: {self.num_samples_seen} and it's type is {type(self.num_samples_seen)}")
         pkg = dict(
             model = self.accelerator.get_state_dict(self.transformer),
             optim = self.optim.state_dict(),
