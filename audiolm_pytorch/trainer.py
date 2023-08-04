@@ -777,7 +777,7 @@ class SemanticTransformerTrainer(nn.Module):
 
         # log
 
-        self.print(f"{steps}: loss: {logs['loss']}")
+        self.print(f"semantic {steps}: loss: {logs['loss']}")
         self.accelerator.log({"train_loss": logs['loss']}, step=steps)
 
         # sample results every so often
@@ -794,7 +794,7 @@ class SemanticTransformerTrainer(nn.Module):
                     valid_loss += self.train_wrapper(**data_kwargs, return_loss = True)
             valid_loss = valid_loss.clone()
             valid_loss /= self.average_valid_loss_over_grad_accum_every
-            self.print(f'{steps}: valid loss {valid_loss}')
+            self.print(f'semantic {steps}: valid loss {valid_loss}')
             self.accelerator.log({"valid_loss": valid_loss}, step=steps)
 
         # save model every so often
@@ -1035,7 +1035,7 @@ class CoarseTransformerTrainer(nn.Module):
 
         # log
 
-        self.print(f"{steps}: loss: {logs['loss']}")
+        self.print(f"coarse {steps}: loss: {logs['loss']}")
         self.accelerator.log({"train_loss": logs['loss']}, step=steps)
 
         # sample results every so often
@@ -1054,12 +1054,9 @@ class CoarseTransformerTrainer(nn.Module):
                         **data_kwargs,
                         return_loss = True
                     )
-                    print(f"is valid loss a tensor? {isinstance(valid_loss, torch.Tensor)}")
-                    if isinstance(valid_loss, torch.Tensor):
-                        print(f"valid loss is a tensor and shape is {valid_loss.shape}")
             valid_loss = valid_loss.clone()
             valid_loss /= self.average_valid_loss_over_grad_accum_every
-            self.print(f'{steps}: valid loss {valid_loss}')
+            self.print(f'coarse {steps}: valid loss {valid_loss}')
             self.accelerator.log({"valid_loss": valid_loss}, step=steps)
 
         # save model every so often
@@ -1296,7 +1293,7 @@ class FineTransformerTrainer(nn.Module):
 
         # log
 
-        self.print(f"{steps}: loss: {logs['loss']}")
+        self.print(f"fine {steps}: loss: {logs['loss']}")
         self.accelerator.log({"train_loss": logs['loss']}, step=steps)
 
         # sample results every so often
@@ -1313,7 +1310,7 @@ class FineTransformerTrainer(nn.Module):
                     valid_loss += self.train_wrapper(**data_kwargs, return_loss = True)
             valid_loss = valid_loss.clone()
             valid_loss /= self.average_valid_loss_over_grad_accum_every
-            self.print(f'{steps}: valid loss {valid_loss}')
+            self.print(f'fine {steps}: valid loss {valid_loss}')
             self.accelerator.log({"valid_loss": valid_loss}, step=steps)
 
         # save model every so often
