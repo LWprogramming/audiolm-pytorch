@@ -792,6 +792,7 @@ class SemanticTransformerTrainer(nn.Module):
                 with torch.inference_mode():
                     self.train_wrapper.eval()
                     valid_loss += self.train_wrapper(**data_kwargs, return_loss = True)
+            valid_loss = valid_loss.clone()
             valid_loss /= self.average_valid_loss_over_grad_accum_every
             self.print(f'{steps}: valid loss {valid_loss}')
             self.accelerator.log({"valid_loss": valid_loss}, step=steps)
@@ -1053,6 +1054,10 @@ class CoarseTransformerTrainer(nn.Module):
                         **data_kwargs,
                         return_loss = True
                     )
+                    print(f"is valid loss a tensor? {isinstance(valid_loss, torch.Tensor)}")
+                    if isinstance(valid_loss, torch.Tensor):
+                        print(f"valid loss is a tensor and shape is {valid_loss.shape}")
+            valid_loss = valid_loss.clone()
             valid_loss /= self.average_valid_loss_over_grad_accum_every
             self.print(f'{steps}: valid loss {valid_loss}')
             self.accelerator.log({"valid_loss": valid_loss}, step=steps)
@@ -1306,6 +1311,7 @@ class FineTransformerTrainer(nn.Module):
                 with torch.inference_mode():
                     self.train_wrapper.eval()
                     valid_loss += self.train_wrapper(**data_kwargs, return_loss = True)
+            valid_loss = valid_loss.clone()
             valid_loss /= self.average_valid_loss_over_grad_accum_every
             self.print(f'{steps}: valid loss {valid_loss}')
             self.accelerator.log({"valid_loss": valid_loss}, step=steps)
