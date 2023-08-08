@@ -16,6 +16,7 @@ import torch
 import torchaudio
 from torch import nn
 from torch.utils.data import Dataset, DataLoader, random_split
+import datetime
 
 from einops import rearrange
 
@@ -84,7 +85,10 @@ def noop(*args, **kwargs):
 def cycle(dl):
     while True:
         for data in dl:
+            if data is None:
+                raise AssertionError('data loader returned None')
             yield data
+    raise AssertionError('should never reach here')
 
 def cast_tuple(t):
     return t if isinstance(t, (tuple, list)) else (t,)
@@ -272,6 +276,7 @@ class SoundStreamTrainer(nn.Module):
             self.dl = get_dataloader(self.ds, batch_size = batch_size, num_workers = dl_num_workers, shuffle = True, drop_last = dataloader_drop_last)
 
             self.valid_dl = get_dataloader(self.valid_ds, batch_size = batch_size, num_workers = dl_num_workers, shuffle = True, drop_last = dataloader_drop_last)
+        self.num_samples_seen = 0 # track batch_size * num_steps * grad_accum_every
 
         # prepare with accelerator
 
@@ -330,6 +335,7 @@ class SoundStreamTrainer(nn.Module):
             optim = self.optim.state_dict(),
             config = self.unwrapped_soundstream._configs,
             discr_optim = self.discr_optim.state_dict(),
+            num_samples_seen = self.num_samples_seen,
             version = __version__
         )
 
@@ -383,6 +389,12 @@ class SoundStreamTrainer(nn.Module):
         # + 1 to start from the next step and avoid overwriting the last checkpoint
 
         self.steps = torch.tensor([checkpoint_num_steps(path) + 1], device=self.device)
+        self.num_samples_seen = pkg['num_samples_seen']
+        # fast-forward the dataloader by num_samples_seen so that we continue training from where we left off
+        for i in range(self.num_samples_seen):
+            next(self.dl_iter)
+            if i % self.save_results_every == 0:
+                next(self.valid_dl_iter)
 
     def multiscale_discriminator_iter(self):
         for ind, discr in enumerate(self.unwrapped_soundstream.discriminators):
@@ -428,6 +440,7 @@ class SoundStreamTrainer(nn.Module):
 
         for _ in range(self.grad_accum_every):
             wave, = next(self.dl_iter)
+            self.num_samples_seen += self.batch_size
             wave = wave.to(device)
 
             loss, (recon_loss, multi_spectral_recon_loss, adversarial_loss, feature_loss, all_commitment_loss) = self.soundstream(wave, return_loss_breakdown = True)
@@ -597,11 +610,8 @@ class SemanticTransformerTrainer(nn.Module):
     ):
         super().__init__()
         check_one_trainer()
-
-        self.accelerator = Accelerator(
-            split_batches = split_batches,
-            **accelerate_kwargs
-        )
+        kwargs = DistributedDataParallelKwargs(find_unused_parameters = True)
+        self.accelerator = Accelerator(split_batches = split_batches, kwargs_handlers = [kwargs], **accelerate_kwargs)
 
         self.wav2vec = wav2vec
         self.transformer = transformer
@@ -666,6 +676,7 @@ class SemanticTransformerTrainer(nn.Module):
         self.dl = get_dataloader(self.ds, batch_size = batch_size, shuffle = True, drop_last = drop_last)
 
         self.valid_dl = get_dataloader(self.valid_ds, batch_size = batch_size, shuffle = True, drop_last = drop_last)
+        self.num_samples_seen = 0 # track batch_size * num_steps * grad_accum_every
 
         # prepare with accelerator
 
@@ -701,12 +712,16 @@ class SemanticTransformerTrainer(nn.Module):
         self.average_valid_loss_over_grad_accum_every = average_valid_loss_over_grad_accum_every
 
     def save(self, path):
+        print(f"self.num_samples_seen: {self.num_samples_seen} and it's type is {type(self.num_samples_seen)}")
         pkg = dict(
             model = self.accelerator.get_state_dict(self.transformer),
             optim = self.optim.state_dict(),
+            num_samples_seen = self.num_samples_seen,
             version = __version__
         )
         torch.save(pkg, path)
+        torch.save(self.dl, path + '_dl')
+        torch.save(self.valid_dl, path + '_valid_dl')
 
     def load(self, path):
         transformer = self.accelerator.unwrap_model(self.transformer)
@@ -716,7 +731,20 @@ class SemanticTransformerTrainer(nn.Module):
 
         # + 1 to start from the next step and avoid overwriting the last checkpoint
         self.steps = torch.tensor([checkpoint_num_steps(path) + 1], device=self.device)
-
+        self.num_samples_seen = pkg['num_samples_seen']
+        print(f"seen {self.num_samples_seen} samples so far on steps {self.steps}")
+        # fast-forward the dataloader by num_samples_seen so that we continue training from where we left off
+        self.dl = torch.load(path + '_dl')
+        self.valid_dl = torch.load(path + '_valid_dl')
+        # self.ds.fast_forward = True # TODO: if this works, apply to other dataloaders including my custom cocochorales one
+        # self.valid_ds.fast_forward = True
+        # for i in range(self.num_samples_seen):
+        #     print(f"i is {i}")
+        #     next(self.dl_iter)
+        #     if i % self.save_results_every == 0:
+        #         next(self.valid_dl_iter)
+        # self.ds.fast_forward = False
+        # self.valid_ds.fast_forward = False
 
     def print(self, msg):
         self.accelerator.print(msg)
@@ -744,7 +772,6 @@ class SemanticTransformerTrainer(nn.Module):
         if not exists(self.ds_fields):
             self.ds_fields = determine_types(data, DATASET_FIELD_TYPE_CONFIG)
             assert not has_duplicates(self.ds_fields), 'dataset fields must not have duplicate field names'
-
         return dict(zip(self.ds_fields, data))
 
     def train_step(self):
@@ -762,7 +789,27 @@ class SemanticTransformerTrainer(nn.Module):
 
         for _ in range(self.grad_accum_every):
             data_kwargs = self.data_tuple_to_kwargs(next(self.dl_iter))
+            if self.steps == 0 and _ == 0:
+                # write the audio to file named something like out-{datetime}.wav to double-check the data is correct
+                output_path = str(self.results_folder / f'device-{self.device}-semantic-input-data-{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.wav')
+                generated_wav = data_kwargs['raw_wave']
+                print(f"from device {self.device}: semantic generated_wav.shape = {generated_wav.shape}")
+                # generated_wav is batch x time -> just save generated_wav[0], which needs to be a 1 x time
+                torchaudio.save(output_path, generated_wav[0].unsqueeze(0).cpu(), 24000)
+                # print(f"semantic data inspection: data_kwargs.keys() = {data_kwargs.keys()}")
 
+            # if we JUST saved a checkpoint (and in this experimental run are loading from ckpt as well), then log what the input data looks like, so we can compare across runs to see if the dataloader is repeatedly giving us the same data
+            if steps % self.save_model_every == 1:
+                # save data
+                if self.accelerator.is_main_process:
+                    output_path = str(self.results_folder / f'pre-checkpoint-semantic-input-data-{steps}-steps.wav')
+                    generated_wav = data_kwargs['raw_wave']
+                    self.print(f"writing to output path {output_path}")
+                    torchaudio.save(output_path, generated_wav[0].unsqueeze(0).cpu(), 24000)
+                # ok, now that we've saved the data, continue
+                self.accelerator.wait_for_everyone()
+
+            self.num_samples_seen += self.batch_size
             loss = self.train_wrapper(**data_kwargs, return_loss = True)
 
             self.accelerator.backward(loss / self.grad_accum_every)
@@ -781,7 +828,6 @@ class SemanticTransformerTrainer(nn.Module):
         self.accelerator.log({"train_loss": logs['loss']}, step=steps)
 
         # sample results every so often
-
         self.accelerator.wait_for_everyone()
 
         if self.is_main and not (steps % self.save_results_every):
@@ -798,12 +844,11 @@ class SemanticTransformerTrainer(nn.Module):
             self.accelerator.log({"valid_loss": valid_loss}, step=steps)
 
         # save model every so often
-
         if self.is_main and not (steps % self.save_model_every):
             model_path = str(self.results_folder / f'semantic.transformer.{steps}.pt')
             self.save(model_path)
 
-            self.print(f'{steps}: saving model to {str(self.results_folder)}')
+            self.print(f'semantic {steps}: saving model to {str(self.results_folder)}')
 
         self.steps += 1
         return logs
@@ -851,11 +896,8 @@ class CoarseTransformerTrainer(nn.Module):
     ):
         super().__init__()
         check_one_trainer()
-
-        self.accelerator = Accelerator(
-            split_batches = split_batches,
-            **accelerate_kwargs
-        )
+        kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
+        self.accelerator = Accelerator(split_batches = split_batches, kwargs_handlers=[kwargs], **accelerate_kwargs)
 
         self.transformer = transformer
         self.codec = codec
@@ -926,7 +968,7 @@ class CoarseTransformerTrainer(nn.Module):
         self.dl = get_dataloader(self.ds, batch_size = batch_size, shuffle = True, drop_last = drop_last)
 
         self.valid_dl = get_dataloader(self.valid_ds, batch_size = batch_size, shuffle = True, drop_last = drop_last)
-
+        self.num_steps_seen = 0 # track batch_size * num_steps * grad_accum_every
         # prepare with accelerator
 
         (
@@ -947,7 +989,7 @@ class CoarseTransformerTrainer(nn.Module):
         self.valid_dl_iter = cycle(self.valid_dl)
 
         self.save_model_every = save_model_every
-        self.save_results_every = save_results_every    
+        self.save_results_every = save_results_every
 
         self.results_folder = Path(results_folder)
 
@@ -957,7 +999,7 @@ class CoarseTransformerTrainer(nn.Module):
         self.results_folder.mkdir(parents = True, exist_ok = True)
 
         hps = {"num_train_steps": num_train_steps, "data_max_length": data_max_length, "learning_rate": lr}
-        self.accelerator.init_trackers("coarse", config=hps)        
+        self.accelerator.init_trackers("coarse", config=hps)
 
         self.train_wrapper.to(self.device)
         self.average_valid_loss_over_grad_accum_every = average_valid_loss_over_grad_accum_every
@@ -966,6 +1008,7 @@ class CoarseTransformerTrainer(nn.Module):
         pkg = dict(
             model = self.accelerator.get_state_dict(self.transformer),
             optim = self.optim.state_dict(),
+            num_steps_seen = self.num_steps_seen,
             version = __version__
         )
         torch.save(pkg, path)
@@ -978,7 +1021,12 @@ class CoarseTransformerTrainer(nn.Module):
 
         # + 1 to start from the next step and avoid overwriting the last checkpoint
         self.steps = torch.tensor([checkpoint_num_steps(path) + 1], device=self.device)
-
+        self.num_steps_seen = pkg['num_steps_seen']
+        # fast-forward the dataloader by num_samples_seen so that we continue training from where we left off
+        for i in range(self.num_samples_seen):
+            next(self.dl_iter)
+            if i % self.save_results_every == 0:
+                next(self.valid_dl_iter)
 
     def print(self, msg):
         self.accelerator.print(msg)
@@ -1002,6 +1050,13 @@ class CoarseTransformerTrainer(nn.Module):
     def is_local_main(self):
         return self.accelerator.is_local_main_process
 
+    def data_tuple_to_kwargs(self, data):
+        if not exists(self.ds_fields):
+            self.ds_fields = determine_types(data, DATASET_FIELD_TYPE_CONFIG)
+            assert not has_duplicates(self.ds_fields), 'dataset fields must not have duplicate field names'
+
+        return dict(zip(self.ds_fields, data))
+
     def train_step(self):
         device = self.device
 
@@ -1014,10 +1069,27 @@ class CoarseTransformerTrainer(nn.Module):
         logs = {}
 
         # update vae (generator)
-
+        # print(f"device is {device} is here with self.grad_accum_every {self.grad_accum_every} and self.steps {self.steps}")
+        # print(f"coarse training on device {device}")
+        # print(f"on device {device}: accelerator has {len(self.accelerator._dataloaders)} dataloaders. each dataloader's rng_types dumped: {[dl.rng_types for dl in self.accelerator._dataloaders]} and their corresponding synchronized_generator: {[dl.synchronized_generator for dl in self.accelerator._dataloaders]}")
         for _ in range(self.grad_accum_every):
-            data_kwargs = dict(zip(self.ds_fields, next(self.dl_iter)))
-
+            # print(f"step {_} and arrived here on device {device}")
+            data_kwargs = self.data_tuple_to_kwargs(next(self.dl_iter))
+            loss = self.train_wrapper(**data_kwargs, return_loss = True)
+            # data_kwargs = dict(zip(self.ds_fields, next(self.dl_iter)))
+            if self.steps == 0 and _ == 0:
+                # print(f"coarse dataloader size = {len(self.dl)} for device {self.device}")
+                # write the audio to file named something like out-{datetime}.wav to double-check the data is correct
+                output_path = str(self.results_folder / f'device-{self.device}-coarse-input-data-{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.wav')
+                generated_wav = data_kwargs['raw_wave']
+                print(f"from device {self.device} coarse generated_wav.shape = {generated_wav.shape}")
+                # generated_wav is batch x time -> just save generated_wav[0], which needs to be a 1 x time
+                torchaudio.save(output_path, generated_wav[0].unsqueeze(0).cpu(), 24000)                # print(f"coarse data inspection: data_kwargs.keys() = {data_kwargs.keys()}")
+            # loss = self.train_wrapper(
+            #     **data_kwargs,
+            #     return_loss = True
+            # )
+            self.num_steps_seen += self.batch_size
             loss = self.train_wrapper(
                 **data_kwargs,
                 return_loss = True
@@ -1037,11 +1109,10 @@ class CoarseTransformerTrainer(nn.Module):
 
         self.print(f"coarse {steps}: loss: {logs['loss']}")
         self.accelerator.log({"train_loss": logs['loss']}, step=steps)
-
+        # print(f"{steps}: device {device} arrived at 2\n")
         # sample results every so often
-
         self.accelerator.wait_for_everyone()
-
+        # print(f"{steps}: device {device} arrived 3\n") # in a given step: expect to never see any device hit 3 until everyone's hit 2
         if self.is_main and not (steps % self.save_results_every):
             valid_loss = 0
             for i in range(self.average_valid_loss_over_grad_accum_every):
@@ -1058,22 +1129,28 @@ class CoarseTransformerTrainer(nn.Module):
             valid_loss /= self.average_valid_loss_over_grad_accum_every
             self.print(f'coarse {steps}: valid loss {valid_loss}')
             self.accelerator.log({"valid_loss": valid_loss}, step=steps)
-
+        # print(f"{steps}: accelerator waiting for everyone on device {device}, arrived 4")
+        # self.accelerator.wait_for_everyone()
+        # print(f"{steps}: accelerator waited for everyone on device {device}, arrived 5")
         # save model every so often
-
         if self.is_main and not (steps % self.save_model_every):
             model_path = str(self.results_folder / f'coarse.transformer.{steps}.pt')
             self.save(model_path)
 
-            self.print(f'{steps}: saving model to {str(self.results_folder)}')
-
+            self.print(f'coarse {steps}: saving model to {str(self.results_folder)}')
+        # print(f"\ndevice {device} after save possibly\n")
+        # print(f"{steps}: accelerator waiting for everyone on device {device}, arrived 6")
+        # self.accelerator.wait_for_everyone()
+        # print(f"{steps}: accelerator waited for everyone on device {device}, arrived 7")
         self.steps += 1
         return logs
 
     def train(self, log_fn = noop):
-
+        # print(f"from device {self.device}: entered train with dataset length {len(self.ds)}")
         while self.steps < self.num_train_steps:
+            # self.print(f"starting step {self.steps} out of {self.num_train_steps}")
             logs = self.train_step()
+            # self.print(f"finished step {self.steps} out of {self.num_train_steps}")
             log_fn(logs)
 
         self.print('training complete')
@@ -1112,11 +1189,8 @@ class FineTransformerTrainer(nn.Module):
     ):
         super().__init__()
         check_one_trainer()
-
-        self.accelerator = Accelerator(
-            split_batches = split_batches,
-            **accelerate_kwargs
-        )
+        kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
+        self.accelerator = Accelerator(split_batches = split_batches, kwargs_handlers=[kwargs], **accelerate_kwargs)
 
         self.transformer = transformer
         self.codec = codec
@@ -1182,6 +1256,7 @@ class FineTransformerTrainer(nn.Module):
         self.dl = get_dataloader(self.ds, batch_size = batch_size, shuffle = True, drop_last = drop_last)
 
         self.valid_dl = get_dataloader(self.valid_ds, batch_size = batch_size, shuffle = True, drop_last = drop_last)
+        self.num_steps_seen = 0 # track batch_size * num_steps * grad_accum_every
 
         # prepare with accelerator
 
@@ -1203,7 +1278,7 @@ class FineTransformerTrainer(nn.Module):
         self.valid_dl_iter = cycle(self.valid_dl)
 
         self.save_model_every = save_model_every
-        self.save_results_every = save_results_every    
+        self.save_results_every = save_results_every
 
         self.results_folder = Path(results_folder)
 
@@ -1213,7 +1288,7 @@ class FineTransformerTrainer(nn.Module):
         self.results_folder.mkdir(parents = True, exist_ok = True)
 
         hps = {"num_train_steps": num_train_steps, "data_max_length": data_max_length, "learning_rate": lr}
-        self.accelerator.init_trackers("fine", config=hps)        
+        self.accelerator.init_trackers("fine", config=hps)
 
         self.train_wrapper.to(self.device)
         self.average_valid_loss_over_grad_accum_every = average_valid_loss_over_grad_accum_every
@@ -1222,6 +1297,7 @@ class FineTransformerTrainer(nn.Module):
         pkg = dict(
             model = self.accelerator.get_state_dict(self.transformer),
             optim = self.optim.state_dict(),
+            num_steps_seen = self.num_steps_seen,
             version = __version__
         )
         torch.save(pkg, path)
@@ -1234,6 +1310,12 @@ class FineTransformerTrainer(nn.Module):
 
         # + 1 to start from the next step and avoid overwriting the last checkpoint
         self.steps = torch.tensor([checkpoint_num_steps(path) + 1], device=self.device)
+        self.num_steps_seen = pkg["num_steps_seen"]
+        # fast-forward the dataloader by num_samples_seen so that we continue training from where we left off
+        for i in range(self.num_samples_seen):
+            next(self.dl_iter)
+            if i % self.save_results_every == 0:
+                next(self.valid_dl_iter)
 
     def print(self, msg):
         self.accelerator.print(msg)
@@ -1279,6 +1361,14 @@ class FineTransformerTrainer(nn.Module):
 
         for _ in range(self.grad_accum_every):
             data_kwargs = self.data_tuple_to_kwargs(next(self.dl_iter))
+            if self.steps == 0 and _ == 0:
+                # write the audio to file named something like out-{datetime}.wav to double-check the data is correct
+                output_path = str(self.results_folder / f'device-{self.device}-fine-input-data-{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.wav')
+                generated_wav = data_kwargs['raw_wave']
+                print(f"from device {self.device} fine generated_wav.shape = {generated_wav.shape}")
+                # generated_wav is batch x time -> just save generated_wav[0], which needs to be a 1 x time
+                torchaudio.save(output_path, generated_wav[0].unsqueeze(0).cpu(), 24000)                # print(f"fine data inspection: data_kwargs.keys() = {data_kwargs.keys()}")
+            self.num_steps_seen += self.batch_size
             loss = self.train_wrapper(**data_kwargs, return_loss = True)
 
             self.accelerator.backward(loss / self.grad_accum_every)
@@ -1297,7 +1387,6 @@ class FineTransformerTrainer(nn.Module):
         self.accelerator.log({"train_loss": logs['loss']}, step=steps)
 
         # sample results every so often
-
         self.accelerator.wait_for_everyone()
 
         if self.is_main and not (steps % self.save_results_every):
@@ -1314,12 +1403,11 @@ class FineTransformerTrainer(nn.Module):
             self.accelerator.log({"valid_loss": valid_loss}, step=steps)
 
         # save model every so often
-
         if self.is_main and not (steps % self.save_model_every):
             model_path = str(self.results_folder / f'fine.transformer.{steps}.pt')
             self.save(model_path)
 
-            self.print(f'{steps}: saving model to {str(self.results_folder)}')
+            self.print(f'fine {steps}: saving model to {str(self.results_folder)}')
 
         self.steps += 1
         return logs

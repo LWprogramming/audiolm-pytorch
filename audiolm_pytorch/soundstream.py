@@ -30,6 +30,11 @@ parsed_version = version.parse(__version__)
 
 import pickle
 
+from encodec import EncodecModel
+from encodec.utils import convert_audio, _linear_overlap_add
+import torchaudio
+
+
 # helper functions
 
 def exists(val):
@@ -607,7 +612,7 @@ class SoundStream(nn.Module):
 
     def decode_from_codebook_indices(self, quantized_indices):
         quantized_indices = rearrange(quantized_indices, 'b n (g q) -> g b n q', g = self.rq_groups)
-
+        # quantized indices shape batch x num_timesteps x num_groups x num_quantizers
         codes = self.rq.get_codes_from_indices(quantized_indices)
         x = reduce(codes, 'g q b n d -> b n (g d)', 'sum')
 
@@ -618,8 +623,15 @@ class SoundStream(nn.Module):
             x, *_ = self.rq(x)
 
         x = self.decoder_attn(x)
-        x = rearrange(x, 'b n c -> b c n')
-        return self.decoder(x)
+        # x shape after decoder attn torch.Size([1, 512, 512]). shape unchanged.
+        # print(f"x shape after decoder attn {x.shape}")
+        x = rearrange(x, 'b n c -> b c n') # batch x timesteps x codebook vector size -> batch x codebook dim x timesteps
+        result = self.decoder(x)
+        # decoder(x) shape torch.Size([1, 1, 163840]) # decoder does timesteps x stride product to basically "unwind" things
+        # 512 coarse/fine tokens total, and audiolm stride product defaults to 320
+        # the product is number of timesteps in decoded result
+        # print(f"decoder(x) shape {result.shape}")
+        return result
 
     def save(self, path):
         path = Path(path)
@@ -694,11 +706,14 @@ class SoundStream(nn.Module):
         curtail_from_left = False
     ):
         x, ps = pack([x], '* n')
+        # print(f"x packed {x.shape}")  # 1 x 10240
 
         if exists(input_sample_hz):
             x = resample(x, input_sample_hz, self.target_sample_hz)
+            # print(f"x resampled {x.shape}")
 
         x = curtail_to_multiple(x, self.seq_len_multiple_of, from_left = curtail_from_left)
+        # print(f"x curtail to multipled {x.shape}") # 1 x 10240
 
         if x.ndim == 2:
             x = rearrange(x, 'b n -> b 1 n')
@@ -730,18 +745,26 @@ class SoundStream(nn.Module):
 
         orig_x = x.clone()
 
+        # print(f"x.shape pre-encoder {x.shape}")  # 1 x 1 x 10240
         x = self.encoder(x)
+        # print(f"x.shape post-encoder {x.shape}") # 1 x 512 x 32  batch x codebook_dim x timesteps
 
         x = rearrange(x, 'b c n -> b n c')
 
         if exists(self.encoder_attn):
             x = self.encoder_attn(x)
-
+        # print(f"x.shape pre-rq, {x.shape}") # 1 x 32 x 512 just rearranged from after encoder
         if exists(is_denoising):
             denoise_input = torch.tensor([is_denoising, not is_denoising], dtype = x.dtype, device = self.device) # [1, 0] for denoise, [0, 1] for not denoising
             x = self.encoder_film(x, denoise_input)
 
         x, indices, commit_loss = self.rq(x)
+        # 1 is batch size, 8 is rq num quantizers, 32 is number of frames (result of striding factor and number of timesteps)
+        # basically: max_data_length = 320 * 32 == 10240 so original x shape is [1, 10240]. then 10240 / ( 2 * 4 * 5 * 8) = 32
+        # Unfortunately it doesn't seem so obvious how to precisely observe this effect because modifying striding factor messes with things
+        # but I'm pretty confident it's true based on the soundstream paper https://arxiv.org/pdf/2107.03312.pdf page 4 right column second paragraph
+        # print(f"soundstream indices shape: {indices.shape}") # 1 x 32 x 8
+        # Each of the 32 frames is a vector of 8 integers, each integer is an index into the 512 codebook vectors
 
         if return_encoded:
             indices = rearrange(indices, 'g b n q -> b n (g q)')

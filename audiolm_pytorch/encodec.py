@@ -95,6 +95,7 @@ class EncodecWrapper(nn.Module):
         # convert_audio and unsqueeze. The convert_audio function also doesn't play nicely with batches.
 
         # b = batch, t = timesteps, 1 channel for the 24kHz model, 2 channels for the 48kHz model
+        assert(len(x.shape) == 2), x.shape
         wav = rearrange(x, f'b t -> b {self.model.channels} t')
 
         # Extract discrete codes from EnCodec
@@ -104,6 +105,9 @@ class EncodecWrapper(nn.Module):
         # of shape [batch, num_quantizers, num_samples_per_frame]. We want to concatenate the frames to get all the
         # timesteps concatenated.
         codes = torch.cat([encoded[0] for encoded in encoded_frames], dim=-1)  # [batch, num_quantizers, timesteps]
+        # print(f"from encodec.py after torch.cat: codes.shape: {codes.shape}")
+        some_smallish_number_still_more_than_a_reasonable_number_of_quantizers = 20
+        assert codes.shape[1] <= some_smallish_number_still_more_than_a_reasonable_number_of_quantizers, codes.shape
         # transformer code that uses codec expects codes to be [batch, timesteps, num_quantizers]
         codes = rearrange(codes, 'b q n -> b n q')  # result: [batch, timesteps, num_quantizers]
         # in original soundstream, is x, indices, commit_loss. But we only use indices in eval mode, so just keep that.
@@ -117,7 +121,7 @@ class EncodecWrapper(nn.Module):
             emb, = unpack(emb, ps, '* n c')
 
         codes, = unpack(codes, ps, '* n q')
-
+        # print(f"from encodec.py unpacked codes.shape: {codes.shape}")
         return emb, codes, None
 
     def decode_from_codebook_indices(self, quantized_indices):
@@ -157,6 +161,8 @@ class EncodecWrapper(nn.Module):
         # if num_samples doesn't divide perfectly).
         # num_frames == the number of acoustic tokens you have, one token per frame
         codes = rearrange(quantized_indices, 'b t q -> q b t')
+        # print(f"codes.shape: {codes.shape}")
         emb = self.model.quantizer.decode(codes)
         # emb shape: batch x self.model.quantizer.dimension x T. Note self.model.quantizer.dimension is the embedding dimension
+        # print(f"embedding shape from encodec.py: {emb.shape}")
         return self.model.decoder(emb)

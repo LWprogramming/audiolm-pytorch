@@ -517,10 +517,9 @@ class SemanticTransformer(nn.Module):
     def load(self, path):
         # Return pkg so that if this function gets called from within a Trainer function call,
         # the trainer can also access the package loaded from the checkpoint.
-        device = self.device
         path = Path(path)
         assert path.exists()
-        pkg = torch.load(str(path), map_location = device)
+        pkg = torch.load(str(path), map_location = "cpu")
         # check version
         if 'version' in pkg and version.parse(pkg['version']) < version.parse(__version__):
             print(f'model was trained on older version {pkg["version"]} of audiolm-pytorch')
@@ -659,7 +658,7 @@ class CoarseTransformer(nn.Module):
             **kwargs
         )
 
-        self.codebook_size = codebook_size
+        self.codebook_size = codebook_size # Note: different from num_semantic_tokens (which is typically set to self.wav2vec.codebook_size == k_means n_clusters == 500)
         self.num_coarse_quantizers = num_coarse_quantizers
 
         self.to_semantic_logits = nn.Linear(dim, num_semantic_tokens + 1) if project_semantic_logits else None
@@ -672,10 +671,9 @@ class CoarseTransformer(nn.Module):
     def load(self, path):
         # Return pkg so that if this function gets called from within a Trainer function call,
         # the trainer can also access the package loaded from the checkpoint.
-        device = self.device
         path = Path(path)
         assert path.exists()
-        pkg = torch.load(str(path), map_location = device)
+        pkg = torch.load(str(path), map_location = "cpu")
         # check version
         if 'version' in pkg and version.parse(pkg['version']) < version.parse(__version__):
             print(f'model was trained on older version {pkg["version"]} of audiolm-pytorch')
@@ -714,6 +712,7 @@ class CoarseTransformer(nn.Module):
         cond_drop_prob = None,
         return_only_coarse_logits = False
     ):
+        # print("*" * 20 + "\nEntered CoarseTransformer forward pass\n" + "*" * 20)
         b, device = semantic_token_ids.shape[0], semantic_token_ids.device
         arange = partial(torch.arange, device = device)
 
@@ -736,25 +735,47 @@ class CoarseTransformer(nn.Module):
             keep_mask = prob_mask_like((b,), 1 - cond_drop_prob, device = device)
             text_mask = rearrange(keep_mask, 'b -> b 1') & text_mask
 
+        # afaict in the standard case without any text-conditioning, this reshape is a no-op
+        # print(f"before rearranging: semantic_token_ids.shape {semantic_token_ids.shape}, coarse_token_ids.shape {coarse_token_ids.shape}")
         coarse_token_ids, semantic_token_ids = map(lambda t: rearrange(t, 'b ... -> b (...)'), (coarse_token_ids, semantic_token_ids))
+        # print(f"after rearranging: semantic_token_ids.shape {semantic_token_ids.shape}, coarse_token_ids.shape {coarse_token_ids.shape}")
 
+        # offsets = [0, 500, 1000, 1500, ...]
         offsets = self.codebook_size * arange(self.num_coarse_quantizers)
+        # print(f"coarse_token_ids.shape {coarse_token_ids.shape}") # should be batch x all tokens in row major order
+        # only keep as many offsets as you have coarse tokens
+
         offsets = repeat(offsets, 'q -> 1 (n q)', n = ceil_div(coarse_token_ids.shape[-1], self.num_coarse_quantizers))
+        # print(f"offsets.shape {offsets.shape}")
         offsets = offsets[:, :coarse_token_ids.shape[-1]]
-        coarse_token_ids = coarse_token_ids + offsets
+        # print(f"offsets.shape {offsets.shape}")
+        coarse_token_ids = coarse_token_ids + offsets # so this is element-wise add
+        # print(f"coarse_token_ids.shape after offsets {coarse_token_ids.shape}.")
 
+        # semantic embedding is embedding (num_semantic_tokens + 1, dim)
+        # num_semantic_tokens is semantic's codebook size, dim is a coarse vector dimension
+        # so self.semantic_embedding takes semantic token (+1 is for EOS) to coarse embedding
         semantic_tokens = get_embeds(self.semantic_embedding, semantic_token_ids)
-        coarse_tokens = self.coarse_embedding(coarse_token_ids)
+        # print(f"semantic_tokens.shape {semantic_tokens.shape}") # batch x num_semantic_tokens x dim
+        coarse_tokens = self.coarse_embedding(coarse_token_ids) # batch x num_coarse_token_ids x dim
+        # convert both semantic and coarse token ids to dim-D vectors so you can concatenate them
+        # print(f"coarse_tokens.shape {coarse_tokens.shape}") # autoregressively generating so the first forward pass has coarse_token_ids length 0
 
+        # q = num quantizers, d = embedding dim = 512 by default
+        # n = num coarse tokens per quantizer (what does this mean?)
+        # and then cut out the first T tokens, where T is the total number of coarse tokens we start with in coarse_token_ids
         coarse_quantize_tokens = repeat(self.coarse_quantize_embedding.weight, 'q d -> (n q) d', n = ceil_div(coarse_token_ids.shape[-1], self.num_coarse_quantizers))
         coarse_quantize_tokens = coarse_quantize_tokens[:coarse_token_ids.shape[-1], ...]
-        coarse_tokens = coarse_tokens + coarse_quantize_tokens
+        # print(f"coarse_quantize_tokens.shape {coarse_quantize_tokens.shape}") # num_coarse_tokens x dim...
+        coarse_tokens = coarse_tokens + coarse_quantize_tokens # ...so this is just elementwise add
 
         semantic_seq_len = semantic_tokens.shape[1]
 
+        # 1 start token per batch
         semantic_start_tokens = repeat(self.semantic_start_token, 'd -> b 1 d', b = b)
         coarse_start_tokens = repeat(self.coarse_start_token, 'd -> b 1 d', b = b)
-
+        # print(f"checking if semantic tokens and coarse have eos or something. {semantic_tokens[0][-1]} and coarse {coarse_tokens[0][-1]}")
+        # just concats them directly no fancy tricks beyond that
         tokens = torch.cat((
             semantic_start_tokens,
             semantic_tokens,
@@ -790,6 +811,9 @@ class CoarseTransformer(nn.Module):
             context_mask = text_mask
         )
 
+        # how does this separation work so cleanly? is it just the eos token? but it doesn't hit 100% of the time right??
+        # maybe it's because of self_attn_mask
+        # print(f"checking what's that unknown token in the middle: {tokens[:, semantic_seq_len]}")
         pred_semantic_tokens, pred_coarse_tokens = tokens[:, :semantic_seq_len], tokens[:, (semantic_seq_len + 1):]
 
         # semantic logits
@@ -805,19 +829,23 @@ class CoarseTransformer(nn.Module):
 
         pred_coarse_tokens_groupable = rearrange(pred_coarse_tokens_groupable, 'b (n q) d -> b n q d', q = self.num_coarse_quantizers)
 
+        # q = num_coarse_quantizers, c = codebook_size_with_eos, d=dim, b=batch, n=predicted coarse token length
+        # so for each coarse token, map it to nearest set of quantizer vectors
         coarse_logits_groupable = einsum('q c d, b n q d -> b n q c', self.coarse_logit_weights, pred_coarse_tokens_groupable)
 
         coarse_logits_groupable = rearrange(coarse_logits_groupable, 'b n q c -> b (n q) c')
 
         remainder_num_quantizers = pred_coarse_tokens_remainder.shape[1]
 
+        # something about sequence remainder but i'm not entirely sure
         if remainder_num_quantizers > 0:
             coarse_logits_remainder = einsum('q c d, b q d -> b q c', self.coarse_logit_weights[:remainder_num_quantizers], pred_coarse_tokens_remainder)
 
             coarse_logits = torch.cat((coarse_logits_groupable, coarse_logits_remainder), dim = 1)
         else:
             coarse_logits = coarse_logits_groupable
-
+        # predict next semantic based on current (which are only conditioned on previously-seen semantic + coarse)
+        # and next coarse based on previous semantic + coarse AND current timesteps more-coarse quantizer results
         return semantic_logits, coarse_logits
 
 class FineTransformer(nn.Module):
@@ -846,6 +874,7 @@ class FineTransformer(nn.Module):
         **kwargs
     ):
         super().__init__()
+        # self.dim = dim
         rel_pos_bias = rel_pos_bias and not flash_attn
 
         if audio_text_condition:
@@ -915,10 +944,9 @@ class FineTransformer(nn.Module):
     def load(self, path):
         # Return pkg so that if this function gets called from within a Trainer function call,
         # the trainer can also access the package loaded from the checkpoint.
-        device = self.device
         path = Path(path)
         assert path.exists()
-        pkg = torch.load(str(path), map_location = device)
+        pkg = torch.load(str(path), map_location = "cpu")
         # check version
         if 'version' in pkg and version.parse(pkg['version']) < version.parse(__version__):
             print(f'model was trained on older version {pkg["version"]} of audiolm-pytorch')
@@ -1011,6 +1039,14 @@ class FineTransformer(nn.Module):
         fine_offsets = fine_offsets[:fine_length]
         fine_token_ids = fine_token_ids + rearrange(fine_offsets, '... -> 1 ...') * self.codebook_size
 
+        # torch.Size([1, 1536]) where 1536 is sequence_length * num_coarse_quantizers, in this case 512 * 3.
+        # print("coarse_token_ids.shape", coarse_token_ids.shape)
+
+        # num embeddings = num_coarse_quantizers * codebook_size, in this case 3 * 1024 = 3072. embed dim is 512.
+        # print(f"coarse embedding characteristics: num_embeddings {self.coarse_embedding.num_embeddings} and embed dim "
+        #       f"{self.coarse_embedding.embedding_dim}. expected {self.num_coarse_quantizers} * {self.codebook_size} = {self.num_coarse_quantizers * self.codebook_size} for first dimension")
+        # assert self.coarse_embedding.num_embeddings == self.num_coarse_quantizers * self.codebook_size
+        # assert self.coarse_embedding.embedding_dim == self.dim
         coarse_tokens = self.coarse_embedding(coarse_token_ids)
         fine_tokens = self.fine_embedding(fine_token_ids)
 
@@ -1234,6 +1270,7 @@ class SemanticTransformerWrapper(nn.Module):
             ids = prime_ids
         else:
             ids = torch.empty((batch_size, 0), dtype = torch.long, device = device)
+        # print(f"ids.shape: {ids.shape} and prime_wave {exists(prime_wave)}")
 
         if self.unique_consecutive:
             ids = batch_unique_consecutive(ids, pad_value = self.pad_id)
@@ -1288,6 +1325,7 @@ class SemanticTransformerWrapper(nn.Module):
 
             last_logit_indices += 1
 
+        # print(f"before masking eos, sample_semantic_ids.shape: {sample_semantic_ids.shape}")
         sample_semantic_ids = mask_out_after_eos_id(sample_semantic_ids, self.eos_id, keep_eos = False)
 
         return sample_semantic_ids
@@ -1310,6 +1348,8 @@ class SemanticTransformerWrapper(nn.Module):
             text_embeds = self.audio_conditioner(wavs = raw_wave, namespace = 'semantic')
 
         if not exists(semantic_token_ids):
+            # print(f"raw wave provided for semantic training. raw_wave.shape {raw_wave.shape}")
+            # raw_wave.shape: 1 x max length which is defined by SemanticTransformerWrapper/Trainer. 1 might be batch, not sure
             assert exists(self.wav2vec), 'VQWav2Vec must be be provided if given raw wave for training'
             semantic_token_ids = self.wav2vec(raw_wave, flatten = False)
 
@@ -1450,6 +1490,7 @@ class CoarseTransformerWrapper(nn.Module):
         init_coarse_time_step = 0
         sampled_coarse_token_ids = coarse_token_ids.clone()
 
+        # print(f"init_coarse_time_step {init_coarse_time_step}, max_time_steps {max_time_steps}")
         for time_step in tqdm(range(init_coarse_time_step, max_time_steps), desc = 'generating coarse'):
             for ind in range(self.num_coarse_quantizers):
                 just_finished_quantizer_step = (ind == 0 and time_step > 0)
@@ -1462,19 +1503,39 @@ class CoarseTransformerWrapper(nn.Module):
                     return_only_coarse_logits = True,
                     **kwargs
                 )
-
+                # coarse_logits shape is batch x 1 x (quantizer's codebook size + 1 for eos id)
+                # if time_step == init_coarse_time_step:
+                #     print(f"on coarse quantizer {ind}, given semantic_token_id shape {semantic_token_ids.shape}, coarse_token_ids.shape {coarse_token_ids.shape}. got coarse_logits.shape: {coarse_logits.shape}")
+                #     print(f"I suspect coarse logits shape is batch x codebook size including eos id, where codebook size including eos id is self.transformer.coarse_eos_id + 1. does it match? {self.transformer.coarse_eos_id + 1}")
+                #     print(f"coarse_logits[:, -1]: {coarse_logits[:, -1]}")
                 last_coarse_logits = coarse_logits[:, -1]
 
                 if not just_finished_quantizer_step:
                     last_coarse_logits[:, -1] = float('-inf') # prevent from eos in the middle of a time step
 
+                # filtered logits shape: batch x number_of_remaining_logits after filtering with top_k
                 filtered_logits = top_k(last_coarse_logits, thres = filter_thres)
-                sampled = gumbel_sample(filtered_logits, temperature = temperature, dim = -1)
+                # if time_step == init_coarse_time_step:
+                #     print(f"on coarse quantizer {ind}, coarse_logits.shape: {filtered_logits.shape}.")
 
+                # sampled shape is (batch,). A single-dimension tensor of indices of the codebook for each element in batch
+                sampled = gumbel_sample(filtered_logits, temperature = temperature, dim = -1)
+                # if time_step == init_coarse_time_step:
+                #     print(f"on coarse quantizer {ind}, sampled.shape: {sampled.shape}.")
                 sampled = rearrange(sampled, 'b -> b 1')
                 sampled_coarse_token_ids = torch.cat((sampled_coarse_token_ids, sampled), dim = -1)
+        # assert torch.all(sampled_coarse_token_ids >= 0), "There are negative values in sampled_coarse_token_ids immediately after all sampling done"
+        # eos_token_indices = torch.nonzero(sampled_coarse_token_ids == self.coarse_eos_id)
+        # if len(eos_token_indices) == 0:
+        #     index_of_first_eos = None
+        # else:
+        #     index_of_first_eos = torch.nonzero(sampled_coarse_token_ids == self.coarse_eos_id)[0][1].item() # [0] indexes into the first batch, although there should only be 1 element in the batch anyways because we're just training on a single data point for now. The [1] indexes into the time dimension. We expect this first eos token in the batch to occur at the coarsest granularity, i.e. at the end of a quantizer step.
 
+        # assert index_of_first_eos % self.num_coarse_quantizers == 0, f"The first eos token is not at a multiple of num_coarse_quantizers. instead found index_of_first_eos = {index_of_first_eos} with num_coarse_quantizers = {self.num_coarse_quantizers}"
+        # print(f"checking if sampled_coarse_token_ids has eos, and if so, what index it is. this isn't a big deal at this stage because we're about to mask things out anyways: {torch.nonzero(sampled_coarse_token_ids == self.coarse_eos_id)}")
         sampled_coarse_token_ids = mask_out_after_eos_id(sampled_coarse_token_ids, self.coarse_eos_id, keep_eos = False)
+        # print(f"expecting to have removed all eos ids from sampled_coarse_token_ids")
+        # assert torch.all(sampled_coarse_token_ids != self.coarse_eos_id), "There are eos values in sampled_coarse_token_ids but sampled_coarse_token_ids consists of indices of the codebook"
         sampled_coarse_token_ids = rearrange(sampled_coarse_token_ids, 'b (n q) -> b n q', q = self.num_coarse_quantizers)
 
         if not reconstruct_wave:
@@ -1482,6 +1543,7 @@ class CoarseTransformerWrapper(nn.Module):
 
         assert exists(self.codec)
 
+        # print(f"sampled_coarse_token_ids.shape {sampled_coarse_token_ids.shape} to be decoded from codebook indices by codec")
         wav = self.codec.decode_from_codebook_indices(sampled_coarse_token_ids)
         return rearrange(wav, 'b 1 n -> b n')
 
@@ -1510,6 +1572,7 @@ class CoarseTransformerWrapper(nn.Module):
             text_embeds = self.audio_conditioner(wavs = raw_wave, namespace = 'coarse') # technically audio embeds, but shared text-audio joint embedding space for mulan
 
         if not exists(semantic_token_ids):
+            # print(f"raw wave provided for coarse training. raw_wave.shape {raw_wave.shape}")
             assert exists(self.wav2vec), 'VQWav2Vec must be be provided if given raw wave for training'
             semantic_token_ids = self.wav2vec(raw_wave, flatten = False)
 
@@ -1518,6 +1581,8 @@ class CoarseTransformerWrapper(nn.Module):
 
             with torch.inference_mode():
                 self.codec.eval()
+                # still batch x data_max_length e.g. [1 x 10240]
+                # print(f"raw_wave_for_codec provided for coarse transformer wrapper. raw_wave.shape {raw_wave_for_codec.shape} and device {raw_wave_for_codec.device}")
                 _, indices, _ = self.codec(raw_wave_for_codec, return_encoded = True)
 
                 batch, num_timesteps = raw_wave_for_codec.shape
@@ -1727,14 +1792,25 @@ class FineTransformerWrapper(nn.Module):
                 sampled = rearrange(sampled, 'b -> b 1')
                 sampled_fine_token_ids = torch.cat((sampled_fine_token_ids, sampled), dim = -1)
 
-        sampled_fine_token_ids = mask_out_after_eos_id(sampled_fine_token_ids, self.eos_id, keep_eos = False)
+        print(f"sampled fine token ids shape: {sampled_fine_token_ids.shape}")
+        # expect this to be batch x num_tokens, num tokens ie num frames being int(num_timesteps / self.codec.seq_len_multiple_of) so probably like 1 x (num timesteps / (2 * 4 * 5 * 8)) = 1 x (num_timesteps / 320). notably 500 x 320 == 16k, i forget the math exactly
+        indices_of_eos_id = torch.where(sampled_fine_token_ids == self.eos_id)
+        print(f"num eos ids: {len(indices_of_eos_id[0])}")
+        print(f"indices of eos id: {[(i.item(), j.item()) for i, j in zip(indices_of_eos_id[0], indices_of_eos_id[1])]}")
 
+        sampled_fine_token_ids = mask_out_after_eos_id(sampled_fine_token_ids, self.eos_id, keep_eos = False)
+        print(f"AFTER MASKING OUT AFTER EOS")
+        print(f"num eos ids: {len(indices_of_eos_id[0])}")
+        print(
+            f"indices of eos id: {[(i.item(), j.item()) for i, j in zip(indices_of_eos_id[0], indices_of_eos_id[1])]}")
         # reshape coarse and fine tokens for quantization dimension
 
         sampled_fine_token_ids = rearrange(sampled_fine_token_ids, 'b (n q) -> b n q', q = self.num_fine_quantizers)
         coarse_token_ids = rearrange(coarse_token_ids, 'b (n q) -> b n q', q = self.num_coarse_quantizers)
 
         # whether to mask out fine token positions where the coarse token ids are all padding (variable lengthed training)
+
+        print(f"mask out generated fine tokens is {mask_out_generated_fine_tokens}")
 
         if mask_out_generated_fine_tokens:
             pos_is_all_padding = (coarse_token_ids == self.pad_id).all(dim = -1, keepdim = True)
@@ -1751,7 +1827,13 @@ class FineTransformerWrapper(nn.Module):
 
         coarse_and_fine_ids = torch.cat((coarse_token_ids, sampled_fine_token_ids), dim = -1)
 
+        # coarse_and_fine_ids.shape torch.Size([1, 512, 8])
+        # 1 is batch size, 8 is num_quantizers (confirmed when I ran codec with 12 quantizers instead)
+        # 512 is related to max_time_steps which is a result of CoarseTransformerWrapper's thing about stopping in the last quantizer
+        # (see the code in CoarseTransformerWrapper, where max_time_steps is explicitly set as an argument in its generate() method)
+        print(f"coarse_and_fine_ids.shape {coarse_and_fine_ids.shape} to be decoded from codebook indices by codec")
         wav = self.codec.decode_from_codebook_indices(coarse_and_fine_ids)
+        print(f"wav shape after codec.decode_from_codebook_indices: {wav.shape}")
         return rearrange(wav, 'b 1 n -> b n')
 
     def forward(
@@ -1778,6 +1860,8 @@ class FineTransformerWrapper(nn.Module):
 
             with torch.inference_mode():
                 self.codec.eval()
+                # still batch x data_max_length e.g. [1 x 10240]
+                # print(f"raw wave provided for fine transformer wrapper. raw_wave.shape {raw_wave.shape} and device {raw_wave.device}")
                 _, token_ids, _ = self.codec(raw_wave, return_encoded = True)
 
                 batch, num_timesteps = raw_wave.shape
@@ -1859,13 +1943,13 @@ class AudioLM(nn.Module):
     def __init__(
         self,
         *,
-        wav2vec: Optional[Union[FairseqVQWav2Vec, HubertWithKmeans]], 
+        wav2vec: Optional[Union[FairseqVQWav2Vec, HubertWithKmeans]],
         codec: Union[SoundStream, EncodecWrapper],
         semantic_transformer: SemanticTransformer,
         coarse_transformer: CoarseTransformer,
         fine_transformer: FineTransformer,
         audio_conditioner: Optional[AudioConditionerBase] = None,
-        unique_consecutive = True
+        unique_consecutive = True,
     ):
         super().__init__()
 
@@ -1897,7 +1981,7 @@ class AudioLM(nn.Module):
         )
 
         self.fine = FineTransformerWrapper(
-            codec= codec,
+            codec = codec,
             transformer = fine_transformer,
             audio_conditioner = audio_conditioner
         )
@@ -1947,6 +2031,10 @@ class AudioLM(nn.Module):
             max_length = max_length
         )
 
+        # print(f"generated semantic token id shape: {semantic_token_ids.shape}")
+        # assert not self.coarse_has_condition, "coarse shouldn't have condition right?"
+        # assert not return_coarse_generated_wave, "shouldn't return generated coarse wave right?"
+
         coarse_token_ids_or_recon_wave = self.coarse.generate(
             text_embeds = text_embeds if self.coarse_has_condition else None,
             semantic_token_ids = semantic_token_ids,
@@ -1954,7 +2042,13 @@ class AudioLM(nn.Module):
             prime_wave_input_sample_hz = prime_wave_input_sample_hz,
             reconstruct_wave = return_coarse_generated_wave
         )
-
+        # print(f"generated coarse token id shape: {coarse_token_ids_or_recon_wave.shape}") # should be (batch_size, num_coarse_tokens, num_coarse_quantizers, )
+        # assert coarse_token_ids_or_recon_wave.shape[0] == batch_size, "batch size should be the first dimension"
+        # assert coarse_token_ids_or_recon_wave.shape[2] == self.coarse.num_coarse_quantizers, "num coarse quantizers should be the third dimension"
+        # indices = torch.nonzero((coarse_token_ids_or_recon_wave < 0) | (coarse_token_ids_or_recon_wave > 1536), as_tuple=True)
+        # values = coarse_token_ids_or_recon_wave[indices].tolist()
+        # print("Indices:", [tensor.tolist() for tensor in indices])
+        # print("Values:", values)
         if return_coarse_generated_wave:
             return coarse_token_ids_or_recon_wave
 
