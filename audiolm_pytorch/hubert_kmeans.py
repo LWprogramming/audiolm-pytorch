@@ -49,7 +49,6 @@ class HubertWithKmeans(nn.Module):
 
 
         self.use_mert = use_mert
-
         if not use_mert:
             model_path = Path(checkpoint_path)
             assert model_path.exists(), f'path {checkpoint_path} does not exist'

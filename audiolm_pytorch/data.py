@@ -59,7 +59,7 @@ class SoundDataset(Dataset):
         self.max_target_sample_hz = max(self.target_sample_hz)
         self.seq_len_multiple_of = cast_tuple(seq_len_multiple_of, num_outputs)
 
-        assert len(self.max_length) == len(self.target_sample_hz) and len(self.target_sample_hz) == len(self.seq_len_multiple_of)
+        assert len(self.target_sample_hz) == len(self.seq_len_multiple_of)
 
     def __len__(self):
         return len(self.files)

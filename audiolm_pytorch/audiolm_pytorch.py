@@ -436,19 +436,6 @@ class Transformer(nn.Module):
 
         return self.norm(x)
 
-    def load(self, path):
-        path = Path(path)
-        assert path.exists()
-        pkg = torch.load(str(path), map_location = 'cpu')
-
-        # check version
-
-        if 'version' in pkg and version.parse(pkg['version']) < version.parse(__version__):
-            print(f'model was trained on older version {pkg["version"]} of audiolm-pytorch')
-
-        transformer = self.accelerator.unwrap_model(self.transformer)
-        transformer.load_state_dict(pkg['model'])
-
 # the three hierarchical transformers
 
 class SemanticTransformer(nn.Module):
@@ -1794,23 +1781,13 @@ class FineTransformerWrapper(nn.Module):
 
         print(f"sampled fine token ids shape: {sampled_fine_token_ids.shape}")
         # expect this to be batch x num_tokens, num tokens ie num frames being int(num_timesteps / self.codec.seq_len_multiple_of) so probably like 1 x (num timesteps / (2 * 4 * 5 * 8)) = 1 x (num_timesteps / 320). notably 500 x 320 == 16k, i forget the math exactly
-        indices_of_eos_id = torch.where(sampled_fine_token_ids == self.eos_id)
-        print(f"num eos ids: {len(indices_of_eos_id[0])}")
-        print(f"indices of eos id: {[(i.item(), j.item()) for i, j in zip(indices_of_eos_id[0], indices_of_eos_id[1])]}")
-
         sampled_fine_token_ids = mask_out_after_eos_id(sampled_fine_token_ids, self.eos_id, keep_eos = False)
-        print(f"AFTER MASKING OUT AFTER EOS")
-        print(f"num eos ids: {len(indices_of_eos_id[0])}")
-        print(
-            f"indices of eos id: {[(i.item(), j.item()) for i, j in zip(indices_of_eos_id[0], indices_of_eos_id[1])]}")
         # reshape coarse and fine tokens for quantization dimension
 
         sampled_fine_token_ids = rearrange(sampled_fine_token_ids, 'b (n q) -> b n q', q = self.num_fine_quantizers)
         coarse_token_ids = rearrange(coarse_token_ids, 'b (n q) -> b n q', q = self.num_coarse_quantizers)
 
         # whether to mask out fine token positions where the coarse token ids are all padding (variable lengthed training)
-
-        print(f"mask out generated fine tokens is {mask_out_generated_fine_tokens}")
 
         if mask_out_generated_fine_tokens:
             pos_is_all_padding = (coarse_token_ids == self.pad_id).all(dim = -1, keepdim = True)
